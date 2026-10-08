@@ -213,7 +213,7 @@ pub fn run() {
             // Свое окно: WebviewUrl::default() — это index.html из frontendDist, то есть наша сборка dist/app.
             // Панель разработчика включена явно: в установленном приложении F12 не работает.
             WebviewWindowBuilder::new(app.handle(), "main", WebviewUrl::default())
-                .title("AniMori")
+                .title("HAniMori")
                 .inner_size(1280.0, 800.0)
                 .min_inner_size(1024.0, 600.0)
                 .resizable(true)
