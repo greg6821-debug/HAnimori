@@ -8,9 +8,11 @@
 export type HentasisFileKind = 'mp4' | 'hls' | 'iframe'
 
 export interface HentasisFile {
-  label: string
-  url: string
-  kind: HentasisFileKind
+  label: string;
+  url: string;
+  kind: HentasisFileKind;
+  /** Пометка из «Примечания»: «озвучка · AniStar», «субтитры · Crunchyroll», «хента-трек». */
+  note?: string;
 }
 
 export interface HentasisInfo {
@@ -196,6 +198,97 @@ function extractFiles(html: string, pageUrl: string): RawFile[] {
   return out
 }
 
+
+/* ---------- Примечание: расшифровка «Файлы 1,2 — озвучка от AniStar, файл 3,4 — субтитры…» ---------- */
+
+const NOTE_STOP_RE =
+  /(Скачать|Плеер|Смотреть онлайн|Трейлер|Коммент|Реклама|Похожее|Внимание|Телеграм)/i;
+
+/** Текст примечания из HTML: от слова «Примечание» до стоп-слова следующего блока страницы. */
+function extractNoteText(html: string): string {
+  const plain = html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ');
+  const at = plain.indexOf('Примечание');
+  if (at < 0) return '';
+
+  let text = plain.slice(at).replace(/\s+/g, ' ');
+  const stop = text.search(NOTE_STOP_RE);
+  if (stop > 0) text = text.slice(0, stop);
+  return text.slice(0, 1200);
+}
+
+/** «1,2» → [1,2]; «1-4» → [1,2,3,4]; «9,10» → [9,10]. Диапазон длиннее 50 — мусор, обрываем. */
+function expandFileNumbers(raw: string): number[] {
+  const out: number[] = [];
+  for (const part of raw.split(',')) {
+    const bounds = part.split(/\s*[-–—]\s*/).map((n) => Number.parseInt(n, 10));
+    const first = bounds[0];
+    if (first === undefined || !Number.isFinite(first)) continue;
+    const second = bounds.length > 1 ? bounds[1] : first;
+    const from = Math.max(1, first);
+    const to = Math.min(
+      from + 49,
+      Math.max(from, second !== undefined && Number.isFinite(second) ? second : from),
+    );
+    for (let n = from; n <= to; n += 1) out.push(n);
+  }
+  return out;
+}
+
+/** Из текста куска — вид дорожки и команда: «озвучка от AniStar» → озвучка/AniStar. */
+function classifyNote(body: string): { kind: string; team: string } {
+  const text = body
+    .replace(/\([^)]*\)/g, ' ') // «(эп.1-12)», «(эпизоды склеены по 3)»
+    .replace(/!+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  let kind = '';
+  if (/хента-?трек/i.test(text)) kind = 'хента-трек';
+  else if (/озвучк/i.test(text)) kind = 'озвучка';
+  else if (/субтитр/i.test(text)) kind = 'субтитры';
+
+  let team = '';
+  const tail = /от\s+(.+)$/i.exec(text);
+  if (tail !== null) team = tail[1].replace(/[.,;:\s]+$/g, '').trim();
+
+  return { kind, team };
+}
+
+/** Текст примечания → карта «номер файла → пометка». Не разобралось — карта пустая. */
+export function parseHentasisNote(text: string): Map<number, string> {
+  const map = new Map<number, string>();
+  if (text === '') return map;
+
+  const headerRe = /[Фф]айл(?:ы|а)?\s+(\d+(?:\s*[-–—,]\s*\d+)*)\s*[-–—:]\s*/g;
+  const marks: { files: number[]; headerStart: number; bodyStart: number }[] = [];
+
+  let m: RegExpExecArray | null;
+  while ((m = headerRe.exec(text)) !== null) {
+    marks.push({
+      files: expandFileNumbers(m[1] ?? ''),
+      headerStart: m.index,
+      bodyStart: m.index + m[0].length,
+    });
+  }
+
+  for (let i = 0; i < marks.length; i += 1) {
+    const mark = marks[i];
+    const bodyEnd = i + 1 < marks.length ? marks[i + 1].headerStart : text.length;
+    const { kind, team } = classifyNote(text.slice(mark.bodyStart, bodyEnd));
+    const label = [kind, team].filter((p) => p !== '').join(' · ');
+    if (label === '') continue;
+    for (const n of mark.files) {
+      if (!map.has(n)) map.set(n, label);
+    }
+  }
+
+  return map;
+}
+
+
 export async function getHentasisInfo(
   pageUrl: string,
   fetchPage: PageFetcher,
@@ -221,11 +314,21 @@ export async function getHentasisInfo(
     )
   }
 
-  const files: HentasisFile[] = raw.map((file, index) => ({
-    label: file.label !== undefined && file.label !== '' ? file.label : `Файл ${index + 1}`,
-    url: file.url,
-    kind: classify(file.url),
-  }))
+  // Нумерация примечания = порядок файлов плейлиста на сайте («Файл N»),
+  // который extractFiles сохраняет как есть.
+  const noteMap = parseHentasisNote(extractNoteText(html));
+
+  const files: HentasisFile[] = raw.map((file, index) => {
+    const number = index + 1;
+    const built: HentasisFile = {
+      label: file.label !== undefined && file.label !== '' ? file.label : `Файл ${number}`,
+      url: file.url,
+      kind: classify(file.url),
+    };
+    const note = noteMap.get(number);
+    if (note !== undefined) built.note = note;
+    return built;
+  });
 
   return {
     title: rawTitle === undefined ? undefined : clean(rawTitle),
