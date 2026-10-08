@@ -106,7 +106,7 @@ function onReload(): void {
              и держать их в разметке рельса было не место. -->
         <AppMark class="am-side__logo" />
 
-        <span class="am-side__name">AniMori</span>
+        <span class="am-side__name">HAniMori</span>
       </div>
 
       <nav class="am-side__menu">
