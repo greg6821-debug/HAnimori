@@ -137,25 +137,38 @@ function pushUrl(
 }
 
 function takeFromConfig(body: string, base: string, out: RawFile[], seen: Set<string>): void {
-  const fileRe = /file\s*:\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|(\[[\s\S]*?\]))/gi
+  const fileRe = /file\s*:\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|(\[[\s\S]*?\]))/gi;
 
-  let match: RegExpExecArray | null
+  // Нумерация «Файл N» — своя у каждого конфига плеера: плейлистов на странице
+  // бывает несколько, сайт нумерует каждый заново, и примечание привязано к ней.
+  let perConfig = 0;
+
+  let match: RegExpExecArray | null;
   while ((match = fileRe.exec(body)) !== null) {
     if (match[1] !== undefined || match[2] !== undefined) {
       for (const url of splitPlayerList(match[1] ?? match[2] ?? '')) {
-        pushUrl(url, undefined, base, out, seen)
+        perConfig += 1;
+        pushUrl(url, `Файл ${perConfig}`, base, out, seen);
       }
-      continue
+      continue;
     }
 
-    const arrayBody = match[3] ?? ''
-    const objectRe = /\{[^{}]*\}/g
-    let object: RegExpExecArray | null
+    const arrayBody = match[3] ?? '';
+    const objectRe = /\{[^{}]*\}/g;
+    let object: RegExpExecArray | null;
     while ((object = objectRe.exec(arrayBody)) !== null) {
-      const chunk = object[0]
-      const url = quotedValue(chunk, 'file')
-      if (url === undefined) continue
-      pushUrl(url, quotedValue(chunk, 'title'), base, out, seen)
+      const chunk = object[0];
+      const url = quotedValue(chunk, 'file');
+      if (url === undefined) continue;
+      perConfig += 1;
+      const title = quotedValue(chunk, 'title');
+      pushUrl(
+        url,
+        title !== undefined && title !== '' ? title : `Файл ${perConfig}`,
+        base,
+        out,
+        seen,
+      );
     }
   }
 }
@@ -208,14 +221,21 @@ function extractNoteText(html: string): string {
   const plain = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]*>/g, ' ')
-  const at = plain.indexOf('Примечание')
-  if (at < 0) return ''
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(?:p|div|td|li)>/gi, '\n')
+    .replace(/<[^>]*>/g, ' ');
 
-  let text = plain.slice(at).replace(/\s+/g, ' ')
-  const stop = text.search(NOTE_STOP_RE)
-  if (stop > 0) text = text.slice(0, stop)
-  return text.slice(0, 1200)
+  const at = plain.indexOf('Примечание');
+  if (at < 0) return '';
+
+  // Примечание — одна строка: всё после перевода строки принадлежит странице
+  // (описанию и т.п.) и в пометки попадать не должно.
+  const nl = plain.indexOf('\n', at);
+  let text = (nl === -1 ? plain.slice(at) : plain.slice(at, nl)).replace(/\s+/g, ' ').trim();
+
+  const stop = text.search(NOTE_STOP_RE);
+  if (stop > 0) text = text.slice(0, stop);
+  return text.slice(0, 1200);
 }
 
 /** «1,2» → [1,2]; «1-4» → [1,2,3,4]; «9,10» → [9,10]. Диапазон длиннее 50 — мусор, обрываем. */
@@ -238,22 +258,34 @@ function expandFileNumbers(raw: string): number[] {
 
 /** Из текста куска — вид дорожки и команда: «озвучка от AniStar» → озвучка/AniStar. */
 function classifyNote(body: string): { kind: string; team: string } {
-  const text = body
-    .replace(/\([^)]*\)/g, ' ') // «(эп.1-12)», «(эпизоды склеены по 3)»
-    .replace(/!+/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
+  let text = body.replace(/\([^)]*\)/g, ' ');
 
-  let kind = ''
-  if (/хента-?трек/i.test(text)) kind = 'хента-трек'
-  else if (/озвучк/i.test(text)) kind = 'озвучка'
-  else if (/субтитр/i.test(text)) kind = 'субтитры'
+  // Пункт пометки кончается «!»; всё после — прилипший хвост.
+  const bang = text.indexOf('!');
+  if (bang >= 0) text = text.slice(0, bang);
+  text = text.replace(/\s+/g, ' ').trim();
 
-  let team = ''
-  const tail = /от\s+(.+)$/i.exec(text)
-  if (tail !== null) team = (tail[1] ?? '').replace(/[.,;:\s]+$/g, '').trim()
+  let kind = '';
+  if (/хента-?трек/i.test(text)) kind = 'хента-трек';
+  else if (/озвучк/i.test(text)) kind = 'озвучка';
+  else if (/субтитр/i.test(text)) kind = 'субтитры';
 
-  return { kind, team }
+  let team = '';
+  const tail = /от\s+([^.,;]+)/i.exec(text);
+  if (tail !== null) {
+    team = (tail[1] ?? '').trim();
+  } else {
+    // «от» нет: снимаем слово-вид и предлоги, остальное — команда
+    // («субтитры EroSonsor!» → «EroSonsor»).
+    team = text
+      .replace(/(^|\s)(хента-?трек[а-яё]*|озвучк[а-яё]*|субтитр[а-яё]*|на|для|с)(?=\s|$)/gi, '$1')
+      .replace(/[.,;:]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  if (team.length > 40) team = ''; // длинный хвост — не название команды
+
+  return { kind, team };
 }
 
 /** Текст примечания → карта «номер файла → пометка». Не разобралось — карта пустая. */
@@ -316,19 +348,22 @@ export async function getHentasisInfo(
 
   // Нумерация примечания = порядок файлов плейлиста на сайте («Файл N»),
   // который extractFiles сохраняет как есть.
-  const noteMap = parseHentasisNote(extractNoteText(html))
+  const noteMap = parseHentasisNote(extractNoteText(html));
 
   const files: HentasisFile[] = raw.map((file, index) => {
-    const number = index + 1
+    const labeled = /^Файл\s*(\d+)$/i.exec(file.label ?? '');
+    const number =
+      labeled !== null && labeled[1] !== undefined ? Number(labeled[1]) : index + 1;
+
     const built: HentasisFile = {
-      label: file.label !== undefined && file.label !== '' ? file.label : `Файл ${number}`,
+      label: file.label !== undefined && file.label !== '' ? file.label : `Файл ${index + 1}`,
       url: file.url,
       kind: classify(file.url),
-    }
-    const note = noteMap.get(number)
-    if (note !== undefined) built.note = note
-    return built
-  })
+    };
+    const note = noteMap.get(number);
+    if (note !== undefined) built.note = note;
+    return built;
+  });
 
   return {
     title: rawTitle === undefined ? undefined : clean(rawTitle),
@@ -422,19 +457,16 @@ export function buildSearchQueries(titles: string[], limit = 24): string[] {
   // 2) совпадающие части: названия длиннее нескольких слов DLE в режиме «все слова»
   //    не находит — достаточно одного несовпавшего слова, и выдача пустая.
   for (const title of titles) {
-    const words = normalizeTitle(title).split(' ').filter(Boolean)
-    if (words.length > 3) add(partial, words.slice(0, 3).join(' '))
-    if (words.length > 2) add(partial, words.slice(0, 2).join(' '))
+    const words = normalizeTitle(title).split(' ').filter(Boolean);
+    if (words.length > 3) add(partial, words.slice(0, 3).join(' '));
+    if (words.length > 2) add(partial, words.slice(0, 2).join(' '));
 
-    const longest = words.filter((w) => w.length >= 5).sort((a, b) => b.length - a.length)[0]
-    if (longest !== undefined && words.length > 1) {
-      add(partial, longest)
-
-      // Префиксы самого длинного слова: слитное ромадзи на сайте бывает раздельным
-      // («Otomedori» → «otome dori»), а поиск DLE идёт по словам — префикс «otome»
-      // находит и слитное, и раздельное написание.
-      if (longest.length > 5) add(partial, longest.slice(0, 5))
-      if (longest.length > 4) add(partial, longest.slice(0, 4))
+    // Префиксы самого длинного слова — и для ОДНОСЛОВНЫХ названий тоже:
+    // «Otomedori» DLE по словам не найдёт «otome dori», а префикс «otome» найдёт.
+    const longest = words.filter((w) => w.length >= 5).sort((a, b) => b.length - a.length)[0];
+    if (longest !== undefined) {
+      if (longest.length > 5) add(partial, longest.slice(0, 5));
+      if (longest.length > 4) add(partial, longest.slice(0, 4));
     }
   }
 
@@ -463,31 +495,34 @@ function bestScore(titles: string[], candidates: string[]): number {
 }
 
 function extractHits(html: string, base: string, titles: string[]): HentasisHit[] {
-  const anchorRe = /<a\s[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
-  const out: HentasisHit[] = []
-  const seen = new Set<string>()
+  const anchorRe = /<a\s[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const out: HentasisHit[] = [];
+  const seen = new Set<string>();
 
-  let anchor: RegExpExecArray | null
+  let anchor: RegExpExecArray | null;
   while ((anchor = anchorRe.exec(html)) !== null) {
-    const url = absolutize(anchor[1] ?? '', base)
-    if (url === '' || seen.has(url)) continue
-    const path = url.replace(/^[a-z]+:\/\/[^/]+/i, '')
-    if (!TITLE_PAGE_RE.test(path)) continue
+    const url = absolutize(anchor[1] ?? '', base);
+    if (url === '' || seen.has(url)) continue;
+    const path = url.replace(/^[a-z]+:\/\/[^/]+/i, '');
+    if (!TITLE_PAGE_RE.test(path)) continue;
 
-    const anchorTitle = clean(stripTags(anchor[2] ?? ''))
-    const slugTitle = titleFromUrl(url)
-    if (anchorTitle === '' && slugTitle === '') continue
+    const anchorTitle = clean(stripTags(anchor[2] ?? ''));
+    const slugTitle = titleFromUrl(url);
+    if (anchorTitle === '' && slugTitle === '') continue;
 
-    seen.add(url)
+    seen.add(url);
     out.push({
       url,
       title: anchorTitle !== '' ? anchorTitle : slugTitle,
       score: bestScore(titles, [anchorTitle, slugTitle]),
-    })
-    if (out.length >= 20) break
+    });
+    if (out.length >= 60) break;
   }
 
-  return out
+  // Сортировка до обрезки: ссылки меню и блоков страницы не должны
+  // вытеснять реальные результаты лимитом.
+  out.sort((a, b) => b.score - a.score);
+  return out.slice(0, 20);
 }
 
 /** Удачный формат поиска запоминаем на домен: повторные запросы не перебирают варианты. */
