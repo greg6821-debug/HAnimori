@@ -17,6 +17,7 @@ import { clearCache, getDbStats } from '@/core/db'
 import { adultByBirth } from '@/core/adult'
 import { clearHidden } from '@/core/recs'
 import { saveSetting, settings } from '@/core/settings'
+import { purgeAdultPick } from './home-keep'
 import { APPEARANCES, appearance, setAppearance } from '../appearance'
 import { checkUpdate, installUpdate, updateOffer } from '../update'
 import BrandMark from '../components/BrandMark.vue'
@@ -342,6 +343,7 @@ function onDropList(): void {
 function onAdult(): void {
   if (!adult.value) {
     void saveSetting('showAdult', 'set_adult', false)
+    void purgeAdultPick()
     void clearHidden()
     closeAge()
     return

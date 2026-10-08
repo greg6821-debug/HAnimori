@@ -46,7 +46,7 @@ import TileMark from '../components/TileMark.vue'
 import { pickTextFile } from '../load-file'
 import { navigate } from '../router'
 import { saveXmlFile } from '../save-file'
-import { dropFeed } from './home-keep'
+import { dropFeed, purgeAdultPick } from './home-keep'
 import { systemName } from '../host'
 import { flushWatchKeep, wipeWatch } from './player-keep'
 
@@ -564,6 +564,7 @@ function onExport(): void {
 function onAdult(): void {
   if (!adult.value) {
     void saveSetting('showAdult', 'set_adult', false)
+    void purgeAdultPick()
     closeAge()
     return
   }

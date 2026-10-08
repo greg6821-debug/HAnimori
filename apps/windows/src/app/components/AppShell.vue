@@ -160,11 +160,14 @@ function onReload(): void {
 
         <span class="am-top__gap" />
 
+        <!-- v-tip рисует плашку, но не даёт имени скринридеру: у молчаливых кнопок
+             доступное имя задаётся явно, тем же текстом. -->
         <div class="am-skin" role="group" aria-label="Тема оформления">
           <button
             v-for="item in APPEARANCES"
             :key="item.name"
             v-tip="item.title"
+            :aria-label="item.title"
             class="am-skin__btn"
             :class="{ 'am-skin__btn--on': item.name === appearance }"
             type="button"
@@ -175,7 +178,13 @@ function onReload(): void {
           </button>
         </div>
 
-        <button v-tip="'Обновить окно'" class="am-top__icon" type="button" @click="onReload">
+        <button
+          v-tip="'Обновить окно'"
+          aria-label="Обновить окно"
+          class="am-top__icon"
+          type="button"
+          @click="onReload"
+        >
           <span aria-hidden="true">⟳</span>
         </button>
       </header>
