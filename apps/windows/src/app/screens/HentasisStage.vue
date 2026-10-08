@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // Слой Hentasis: только для iframe-файлов — их нельзя положить в <video>.
-// Видео-файлы играют в общем теге основного плеера, слой здесь не при чём.
+// Видео-файлы играют в общем теге основного плеера. Слой стоит внутри сцены
+// плеера и занимает ровно её площадь: ошибки и пустые iframe не выносятся
+// на всё окно, а остаются в кадре, как заслонка.
 import { computed } from 'vue'
 
 import { hentasis } from './hentasis-store'
@@ -14,32 +16,33 @@ const frame = computed(() => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="frame !== null" class="am-hxs" role="region" aria-label="Просмотр Hentasis">
-      <iframe
-        class="am-hxs__media"
-        :src="frame.url"
-        title="Плеер Hentasis"
-        allow="autoplay; fullscreen; encrypted-media"
-        allowfullscreen
-        referrerpolicy="no-referrer"
-      ></iframe>
+  <div v-if="frame !== null" class="am-hxs" role="region" aria-label="Просмотр Hentasis">
+    <iframe
+      class="am-hxs__media"
+      :src="frame.url"
+      title="Плеер Hentasis"
+      allow="autoplay; fullscreen; encrypted-media"
+      allowfullscreen
+      referrerpolicy="no-referrer"
+    ></iframe>
 
-      <div class="am-hxs__bar">
-        <span class="am-hxs__label">
-          {{ state.infoTitle !== '' ? state.infoTitle : 'Hentasis' }} · iframe
-        </span>
-        <button class="am-hxs__back" type="button" @click="hentasis.close()">Вернуться</button>
-      </div>
+    <div class="am-hxs__bar">
+      <span class="am-hxs__label">
+        {{ state.infoTitle !== '' ? state.infoTitle : 'Hentasis' }} · iframe
+      </span>
+      <button class="am-hxs__back" type="button" @click="hentasis.close()">Вернуться</button>
     </div>
-  </Teleport>
+  </div>
 </template>
 
 <style scoped>
+/* Внутри .am-play__stage: тот же кадр, что у видео. Поверх панели плеера:
+   из-под слоя её кнопки вели бы скрытым кадром. Если какой-то элемент
+   плеера окажется поверх слоя — подними число. */
 .am-hxs {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 2000;
+  z-index: 50;
   background: #000;
 }
 
