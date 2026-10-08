@@ -2,9 +2,9 @@
 
 <img src="apps/windows/src-tauri/icons/128x128@2x.png" width="112" alt="AniMori">
 
-# AniMori
+# HAniMori
 
-### Смотрите аниме и ведите списки AniList на русском — на ПК и ТВ
+### Смотрите аниме и ведите списки AniList на русском — на ПК и ТВ. Доступен просмотри 18+ контента.
 
 Неофициальный клиент AniList для Windows и Android TV. Программа сама обращается
 к API и подставляет русские названия и описания из Shikimori —
