@@ -270,19 +270,20 @@ function classifyNote(body: string): { kind: string; team: string } {
   else if (/озвучк/i.test(text)) kind = 'озвучка';
   else if (/субтитр/i.test(text)) kind = 'субтитры';
 
-  let team = '';
+    // Команда: после «от», а если «от» нет — снимаем слово-вид и предлоги,
+  // остальное и есть команда («субтитры EroSonsor!» → «EroSonsor»).
   const tail = /от\s+([^.,;]+)/i.exec(text);
-  if (tail !== null) {
-    team = (tail[1] ?? '').trim();
-  } else {
-    // «от» нет: снимаем слово-вид и предлоги, остальное — команда
-    // («субтитры EroSonsor!» → «EroSonsor»).
-    team = text
-      .replace(/(^|\s)(хента-?трек[а-яё]*|озвучк[а-яё]*|субтитр[а-яё]*|на|для|с)(?=\s|$)/gi, '$1')
-      .replace(/[.,;:]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
+  let team =
+    tail !== null
+      ? (tail[1] ?? '').trim()
+      : text
+          .replace(
+            /(^|\s)(хента-?трек[а-яё]*|озвучк[а-яё]*|субтитр[а-яё]*|на|для|с)(?=\s|$)/gi,
+            '$1',
+          )
+          .replace(/[.,;:]+/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
   if (team.length > 40) team = ''; // длинный хвост — не название команды
 
   return { kind, team };
