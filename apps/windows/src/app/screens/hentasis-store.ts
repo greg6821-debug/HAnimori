@@ -1,9 +1,10 @@
-// Хранилище источника Hentasis (18+): домены, автопоиск по названиям с AniList,
-// сохранённые ссылки. Одно на всё приложение: бокс в списке и кадр на сцене читают его вместе.
+// Хранилище источника Hentasis (18+): домены, автопоиск по названиям, сохранённые ссылки.
+// Одно на всё приложение: бокс в списке и кадр на сцене читают его вместе.
 import { reactive } from 'vue'
 
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 
+import { fetchMediaCard } from '@/api/anilist-media'
 import {
   autoFindHentasis,
   buildSearchQueries,
@@ -12,15 +13,11 @@ import {
   type HentasisFile,
   type PageRequestInit,
 } from '@/api/hentasis'
+import { peekRussianName, prefetchRussianNames } from '@/core/media-title'
 
 const LINKS_KEY = 'animori:hentasis-links'
 const BASES_KEY = 'animori:hentasis-bases'
 const DEFAULT_BASES = ['https://hentasis1.top']
-
-import { fetchMediaCard } from '@/api/anilist-media'
-// Если у тебя импорт hentasis по другому пути (например, относительный на packages/core) —
-// сохрани свой путь, меняется только набор имён.
-import { peekRussianName, prefetchRussianNames } from '@/core/media-title'
 
 interface SavedLink {
   url: string
@@ -114,7 +111,7 @@ async function fetchPage(page: string, init?: PageRequestInit): Promise<string> 
   return res.text()
 }
 
-/** Все названия тайтла тем же путём, что и весь плеер: карточка AniList + русское имя. */
+/** Названия и год тайтла тем же путём, что и весь плеер: карточка AniList + русское имя. */
 async function fetchTitles(mediaId: number): Promise<{ titles: string[]; year: number }> {
   const card = await fetchMediaCard(mediaId)
   await prefetchRussianNames([mediaId]).catch(() => {})
@@ -173,8 +170,7 @@ async function runSearch(): Promise<void> {
   state.trouble = ''
   resetResult()
 
-
-  
+  try {
     const { titles, year } = await fetchTitles(state.animeId)
     if (titles.length === 0) {
       state.trouble = 'Не достал названия тайтла — поиск невозможен. Вставь ссылку на тайтл сам.'
@@ -215,19 +211,20 @@ function bindAnime(id: number): void {
   if (id === 0) return
 
   const saved = readLinks()[String(id)]
-  if (saved !== undefined && saved.url !== '') {
-    // Ссылка найдена раньше: никакого поиска — один запрос на страницу.
-    state.manualUrl = saved.url
-    void loadPage(saved.url, false).then(() => {
-      if (state.trouble !== '') {
-        state.trouble =
-          `Сохранённая ссылка не открылась (${state.trouble}). ` +
-          'Если тайтл переехал — «Искать по названию» или вставь новую ссылку.'
-      }
-    })
-  } else {
+  if (saved === undefined || saved.url === '') {
     void runSearch()
+    return
   }
+
+  // Ссылка найдена раньше: никакого поиска — один запрос на страницу.
+  state.manualUrl = saved.url
+  void loadPage(saved.url, false).then(() => {
+    if (state.trouble !== '') {
+      state.trouble =
+        `Сохранённая ссылка не открылась (${state.trouble}). ` +
+        'Если тайтл переехал — «Искать по названию» или вставь новую ссылку.'
+    }
+  })
 }
 
 function setBases(text: string): void {
@@ -253,7 +250,7 @@ function originOf(raw: string): string {
 }
 
 /** Одно поле на оба случая: ссылка на тайтл открывается как есть,
- * домен (или что угодно иное) становится доменом поиска и запускает автопоиск. */
+ * домен становится доменом поиска и запускает автопоиск. */
 async function useManual(): Promise<void> {
   const raw = state.manualUrl.trim()
   if (raw === '' || state.busy) return
