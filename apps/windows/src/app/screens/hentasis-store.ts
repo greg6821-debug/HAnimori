@@ -202,7 +202,7 @@ async function runSearch(): Promise<void> {
       throw new Error('AniList не дал названий для поиска — вставь ссылку сам.')
     }
 
-    const found = await autoFindHentasis(readBases(), buildSearchQueries(titles), fetchPage)
+    const found = await autoFindHentasis(readBases(), buildSearchQueries(titles), titles, fetchPage)
 
     state.others = found.candidates
       .slice(0, 8)
