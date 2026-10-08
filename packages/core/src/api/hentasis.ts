@@ -419,7 +419,7 @@ export async function autoFindHentasis(
 
       const hits: HentasisHit[] = await searchHentasis(base, query, titles, fetchPage).catch(
         () => [],
-      );
+      )
 
       for (const hit of hits) {
         const known = pool.get(hit.url)
