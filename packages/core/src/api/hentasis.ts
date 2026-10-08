@@ -223,11 +223,14 @@ export async function getHentasisInfo(
 
 /* ---------- Поиск тайтла по названиям ---------- */
 
-/** Нормализация названий: нижний регистр, ё→е, знаки препинания → пробелы. */
+/** Нормализация для сравнения: нижний регистр, снятие диакритики — NFD убирает и макроны
+ * (daibōken → daibouken), и кириллические надстрочные (ё, й). Знаки → пробелы: комбинированное
+ * название страницы «Русское / English (2012г.)» становится одной строкой слов. */
 export function normalizeTitle(raw: string): string {
   return raw
     .toLowerCase()
-    .replace(/ё/g, 'е')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
 }
@@ -236,69 +239,95 @@ function tokensOf(normalized: string): string[] {
   return normalized.split(' ').filter((word) => word.length >= 2);
 }
 
-/** Схожесть запроса и названия страницы: точное совпадение — 100, вхождение — 85/75,
- * дальше — доля общих слов. Японское название сравнивается вхождением: по словам его не разобрать. */
+/** Схожесть запроса и названия в процентах:
+ *  100 — точное совпадение после нормализации;
+ *  95  — название страницы содержит запрос целиком («Тропический Поцелуй / Tropical Kiss (2012г.)»
+ *        содержит «Tropical Kiss»);
+ *  85  — запрос содержит название страницы целиком;
+ *  ниже — доля слов запроса, найденных в названии, с потолком 84: совпадение по словам
+ *  никогда не останавливает поиск раньше фразового. */
 export function scoreTitleMatch(query: string, title: string): number {
   const q = normalizeTitle(query);
   const t = normalizeTitle(title);
   if (q === '' || t === '') return 0;
   if (q === t) return 100;
-  if (t.includes(q)) return 85;
-  if (q.includes(t) && t.length >= 4) return 75;
+  if (t.includes(q)) return 95;
+  if (q.includes(t) && t.length >= 4) return 85;
 
   const qw = tokensOf(q);
   if (qw.length === 0) return 0;
   const tw = new Set(tokensOf(t));
   let hits = 0;
-  let longHit = false;
   for (const word of qw) {
-    if (!tw.has(word)) continue;
-    hits += 1;
-    if (word.length >= 5) longHit = true;
+    if (tw.has(word)) hits += 1;
   }
   if (hits === 0) return 0;
-  return Math.min(74, Math.round((hits / qw.length) * 60) + (longHit ? 5 : 0));
+  return Math.min(84, Math.round((hits / qw.length) * 100));
 }
 
-/** Запросы для поиска: каждое название целиком, затем его начало и самое длинное слово —
- * это и есть «совпадающие части», когда целиком сайт не находит. */
-export function buildSearchQueries(titles: string[], limit = 12): string[] {
+/** Запросы в два прохода: сначала каждое название ЦЕЛИКОМ — английское, ромадзи, японское
+ * и русское (оно обычно среди синонимов AniList), потом совпадающие части — первые слова
+ * и самое длинное слово, когда целиком сайт не находит. */
+export function buildSearchQueries(titles: string[], limit = 20): string[] {
   const seen = new Set<string>();
-  const out: string[] = [];
+  const full: string[] = [];
+  const partial: string[] = [];
 
-  const add = (raw: string): void => {
-    const q = raw.trim().replace(/\s+/g, ' ');
+  const add = (pool: string[], raw: string): void => {
+    // Знаки в поисковой строке сайту не нужны: «Tropical Kiss!» ищем как «Tropical Kiss».
+    const q = raw
+      .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     if (q.length < 3) return;
     const key = normalizeTitle(q);
     if (key === '' || seen.has(key)) return;
     seen.add(key);
-    out.push(q);
+    pool.push(q);
   };
 
-  for (const title of titles) {
-    const trimmed = title.trim();
-    if (trimmed === '') continue;
-    add(trimmed);
+  for (const title of titles) add(full, title);
 
-    const words = normalizeTitle(trimmed).split(' ').filter(Boolean);
-    if (words.length > 3) add(words.slice(0, 3).join(' '));
-    if (words.length > 2) add(words.slice(0, 2).join(' '));
+  for (const title of titles) {
+    const words = normalizeTitle(title).split(' ').filter(Boolean);
+    if (words.length > 3) add(partial, words.slice(0, 3).join(' '));
+    if (words.length > 2) add(partial, words.slice(0, 2).join(' '));
     const longest = words.filter((w) => w.length >= 5).sort((a, b) => b.length - a.length)[0];
-    if (longest !== undefined && words.length > 1) add(longest);
-    if (out.length >= limit) break;
+    if (longest !== undefined && words.length > 1) add(partial, longest);
   }
 
-  return out.slice(0, limit);
+  return [...full, ...partial].slice(0, limit);
 }
 
-/** Страницы тайтлов на DLE имеют адрес вида /985-….html — по нему узнаём результаты поиска. */
+/** Название из адреса страницы: /159-tropical-kiss.html → «tropical kiss».
+ * У DLE в slug живёт латиница тайтла — часто это надёжнее текста ссылки, который сайт обрезает. */
+function titleFromUrl(url: string): string {
+  const tail = /\/\d+-([a-z0-9-]+)\.html/i.exec(url)?.[1] ?? '';
+  return tail.replace(/-+/g, ' ').trim();
+}
+
+/** Страницы тайтлов на DLE имеют адрес вида /159-….html — по нему узнаём результаты поиска. */
 const PAGE_URL_RE = /\/\d+-[a-z0-9-]+\.html(?:[?#].*)?$/i;
 
 function stripTags(html: string): string {
   return html.replace(/<[^>]*>/g, ' ');
 }
 
-function extractHits(html: string, base: string, query: string): HentasisHit[] {
+/** Лучший балл представлений страницы (текст ссылки, slug) против ВСЕХ названий тайтла:
+ * страница совпадает, если хоть одно её представление совпало хоть с одним названием. */
+function bestScore(titles: string[], candidates: string[]): number {
+  let best = 0;
+  for (const title of titles) {
+    for (const candidate of candidates) {
+      if (candidate === '') continue;
+      const score = scoreTitleMatch(title, candidate);
+      if (score > best) best = score;
+    }
+  }
+  return best;
+}
+
+function extractHits(html: string, base: string, titles: string[]): HentasisHit[] {
   const anchorRe = /<a\s[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
   const out: HentasisHit[] = [];
   const seen = new Set<string>();
@@ -309,39 +338,55 @@ function extractHits(html: string, base: string, query: string): HentasisHit[] {
     if (url === '' || seen.has(url)) continue;
     const path = url.replace(/^[a-z]+:\/\/[^/]+/i, '');
     if (!PAGE_URL_RE.test(path)) continue;
-    const title = clean(stripTags(anchor[2] ?? ''));
-    if (title === '') continue;
+
+    const anchorTitle = clean(stripTags(anchor[2] ?? ''));
+    const slugTitle = titleFromUrl(url);
+    if (anchorTitle === '' && slugTitle === '') continue;
+
     seen.add(url);
-    out.push({ url, title, score: scoreTitleMatch(query, title) });
+    out.push({
+      url,
+      title: anchorTitle !== '' ? anchorTitle : slugTitle,
+      score: bestScore(titles, [anchorTitle, slugTitle]),
+    });
     if (out.length >= 20) break;
   }
 
   return out;
 }
 
-/** Варианты адресов поиска: у DLE их два, у прочих движков — «?s=». Пробуем по очереди. */
-function searchUrls(base: string, query: string): string[] {
+/** Удачный формат поиска запоминаем на домен: DLE отзывается не на все варианты,
+ * а перебирать три адреса на каждый запрос — лишний трафик. */
+const searchPathCache = new Map<string, string>();
+
+function searchVariants(base: string, query: string): { kind: string; url: string }[] {
   const b = base.replace(/\/+$/, '');
   const q = encodeURIComponent(query);
-  return [
-    `${b}/index.php?do=search&subaction=search&story=${q}`,
-    `${b}/index.php?do=search&story=${q}`,
-    `${b}/?s=${q}`,
+  const all = [
+    { kind: 'dle', url: `${b}/index.php?do=search&subaction=search&story=${q}` },
+    { kind: 'dle-short', url: `${b}/index.php?do=search&story=${q}` },
+    { kind: 's', url: `${b}/?s=${q}` },
   ];
+  const known = searchPathCache.get(b);
+  return known === undefined ? all : all.filter((v) => v.kind === known);
 }
 
-/** Поиск по встроенному поиску сайта. */
+/** Поиск по встроенному поиску сайта: query уходит в форму, названия — на сверку результатов. */
 export async function searchHentasis(
   base: string,
   query: string,
+  titles: string[],
   fetchPage: PageFetcher,
 ): Promise<HentasisHit[]> {
-  for (const url of searchUrls(base, query)) {
+  for (const variant of searchVariants(base, query)) {
     try {
-      const hits = extractHits(await fetchPage(url), base, query);
-      if (hits.length > 0) return hits;
+      const hits = extractHits(await fetchPage(variant.url), base, titles);
+      if (hits.length > 0) {
+        searchPathCache.set(base.replace(/\/+$/, ''), variant.kind);
+        return hits;
+      }
     } catch {
-      // адрес не ответил или не дал результатов — пробуем следующий вариант
+      // адрес не ответил — пробуем следующий вариант
     }
   }
   return [];
@@ -352,10 +397,13 @@ function sortPool(pool: Map<string, HentasisHit>): HentasisHit[] {
 }
 
 /** Автопоиск: идём по запросам (полные названия, потом совпадающие части) и доменам,
- * собираем кандидатов; заканчиваем на первом явном совпадении. */
+ * собираем кандидатов; заканчиваем на первом фразовом совпадении (≥ strongScore).
+ * Совпадения по словам (65–84) в пул попадают, но поиск не останавливают —
+ * вдруг дальнейшие запросы дадут точнее. */
 export async function autoFindHentasis(
   bases: string[],
   queries: string[],
+  titles: string[],
   fetchPage: PageFetcher,
   options: HentasisFindOptions = {},
 ): Promise<HentasisFindResult> {
@@ -370,7 +418,7 @@ export async function autoFindHentasis(
 
       let hits: HentasisHit[] = [];
       try {
-        hits = await searchHentasis(base, query, fetchPage);
+        hits = await searchHentasis(base, query, titles, fetchPage);
       } catch {
         hits = [];
       }
