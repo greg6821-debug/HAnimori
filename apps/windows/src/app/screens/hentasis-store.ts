@@ -216,8 +216,15 @@ function bindAnime(id: number): void {
 
   const saved = readLinks()[String(id)]
   if (saved !== undefined && saved.url !== '') {
+    // Ссылка найдена раньше: никакого поиска — один запрос на страницу.
     state.manualUrl = saved.url
-    void loadPage(saved.url, false)
+    void loadPage(saved.url, false).then(() => {
+      if (state.trouble !== '') {
+        state.trouble =
+          `Сохранённая ссылка не открылась (${state.trouble}). ` +
+          'Если тайтл переехал — «Искать по названию» или вставь новую ссылку.'
+      }
+    })
   } else {
     void runSearch()
   }
