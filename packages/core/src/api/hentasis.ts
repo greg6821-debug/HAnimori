@@ -136,79 +136,93 @@ function pushUrl(
   out.push(label === undefined ? { url } : { url, label: clean(label) })
 }
 
-function takeFromConfig(body: string, base: string, out: RawFile[], seen: Set<string>): void {
-  const fileRe = /file\s*:\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|(\[[\s\S]*?\]))/gi
+interface RawConfig {
+  files: RawFile[];
+}
 
-  // Нумерация «Файл N» — своя у каждого конфига плеера: плейлистов на странице
-  // бывает несколько, сайт нумерует каждый заново, и примечание привязано к ней.
-  let perConfig = 0
+/** Файлы одного конфига плеера. Нумерация «Файл N» — внутри конфига: у сайта
+ * она своя у каждого плеера, и примечание привязано именно к ней. */
+function collectFromConfig(body: string, base: string, files: RawFile[], seen: Set<string>): void {
+  const fileRe = /file\s*:\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|(\[[\s\S]*?\]))/gi;
 
-  let match: RegExpExecArray | null
+  let perConfig = 0;
+
+  let match: RegExpExecArray | null;
   while ((match = fileRe.exec(body)) !== null) {
     if (match[1] !== undefined || match[2] !== undefined) {
       for (const url of splitPlayerList(match[1] ?? match[2] ?? '')) {
-        perConfig += 1
-        pushUrl(url, `Файл ${perConfig}`, base, out, seen)
+        perConfig += 1;
+        pushUrl(url, `Файл ${perConfig}`, base, files, seen);
       }
-      continue
+      continue;
     }
 
-    const arrayBody = match[3] ?? ''
-    const objectRe = /\{[^{}]*\}/g
-    let object: RegExpExecArray | null
+    const arrayBody = match[3] ?? '';
+    const objectRe = /\{[^{}]*\}/g;
+    let object: RegExpExecArray | null;
     while ((object = objectRe.exec(arrayBody)) !== null) {
-      const chunk = object[0]
-      const url = quotedValue(chunk, 'file')
-      if (url === undefined) continue
-      perConfig += 1
-      const title = quotedValue(chunk, 'title')
+      const chunk = object[0];
+      const url = quotedValue(chunk, 'file');
+      if (url === undefined) continue;
+      perConfig += 1;
+      const title = quotedValue(chunk, 'title');
       pushUrl(
         url,
         title !== undefined && title !== '' ? title : `Файл ${perConfig}`,
         base,
-        out,
+        files,
         seen,
-      )
+      );
     }
   }
 }
 
-function extractFiles(html: string, pageUrl: string): RawFile[] {
-  const out: RawFile[] = []
-  const seen = new Set<string>()
+/** Конфиги плееров страницы: у тайтла их бывает несколько (дубли шаблона,
+ * зеркала), показывать надо один — выбор в getHentasisInfo. */
+function extractConfigs(html: string, pageUrl: string): RawConfig[] {
+  const configs: RawConfig[] = [];
+  const seen = new Set<string>();
 
-  const playerRe = /Playerjs\s*\(([\s\S]{0,8000}?)\)\s*[;,)]?/gi
-  let player: RegExpExecArray | null
+  const playerRe = /Playerjs\s*\(([\s\S]{0,8000}?)\)\s*[;,)]?/gi;
+  let player: RegExpExecArray | null;
   while ((player = playerRe.exec(html)) !== null) {
-    takeFromConfig(player[1] ?? '', pageUrl, out, seen)
+    const files: RawFile[] = [];
+    collectFromConfig(player[1] ?? '', pageUrl, files, seen);
+    if (files.length > 0) configs.push({ files });
   }
 
-  if (out.length === 0) {
-    const scriptRe = /<script[^>]*>([\s\S]*?)<\/script>/gi
-    let script: RegExpExecArray | null
-    while ((script = scriptRe.exec(html)) !== null) {
-      takeFromConfig(script[1] ?? '', pageUrl, out, seen)
-    }
+  if (configs.length > 0) return configs;
+
+  // Фолбэк 1: скрипты с file: без слова Playerjs
+  const scriptRe = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+  let script: RegExpExecArray | null;
+  while ((script = scriptRe.exec(html)) !== null) {
+    const files: RawFile[] = [];
+    collectFromConfig(script[1] ?? '', pageUrl, files, seen);
+    if (files.length > 0) configs.push({ files });
+  }
+  if (configs.length > 0) return configs;
+
+  // Фолбэк 2: прямые ссылки, затем iframe
+  const files: RawFile[] = [];
+
+  const mediaRe = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8|m4v|webm)(?:\?[^\s"'`<>\\]*)?/gi;
+  let media: RegExpExecArray | null;
+  while ((media = mediaRe.exec(html)) !== null) {
+    pushUrl(media[0], undefined, pageUrl, files, seen);
   }
 
-  if (out.length === 0) {
-    const mediaRe = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8|m4v|webm)(?:\?[^\s"'`<>\\]*)?/gi
-    let media: RegExpExecArray | null
-    while ((media = mediaRe.exec(html)) !== null) {
-      pushUrl(media[0], undefined, pageUrl, out, seen)
-    }
-  }
-
-  if (out.length === 0) {
-    const frameRe = /<iframe[^>]+?src\s*=\s*["']([^"']+)["']/gi
-    let frame: RegExpExecArray | null
+  if (files.length === 0) {
+    const frameRe = /<iframe[^>]+?src\s*=\s*["']([^"']+)["']/gi;
+    let frame: RegExpExecArray | null;
     while ((frame = frameRe.exec(html)) !== null) {
-      const url = absolutize(frame[1] ?? '', pageUrl)
-      if (url !== '' && !IFRAME_JUNK.test(url)) pushUrl(url, undefined, pageUrl, out, seen)
+      const url = absolutize(frame[1] ?? '', pageUrl);
+      if (url !== '' && !IFRAME_JUNK.test(url)) pushUrl(url, undefined, pageUrl, files, seen);
     }
   }
 
-  return out
+  if (files.length > 0) configs.push({ files });
+  return configs;
 }
 
 /* ---------- Примечание: расшифровка «Файлы 1,2 — озвучка от AniStar, файл 3,4 — субтитры…» ---------- */
@@ -216,26 +230,46 @@ function extractFiles(html: string, pageUrl: string): RawFile[] {
 const NOTE_STOP_RE =
   /(Скачать|Плеер|Смотреть онлайн|Трейлер|Коммент|Реклама|Похожее|Внимание|Телеграм)/i
 
-/** Текст примечания из HTML: от слова «Примечание» до стоп-слова следующего блока страницы. */
+/** Строка похожа на продолжение примечания: «Файл N…», «озвучка…», «субтитры…». */
+const NOTE_LINE_RE = /[Фф]айл|субтитр|озвучк|хента-?трек/i;
+
 function extractNoteText(html: string): string {
   const plain = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(?:p|div|td|li)>/gi, '\n')
-    .replace(/<[^>]*>/g, ' ')
+    .replace(/<\/(?:p|div|td|li|tr|h\d)>/gi, '\n')
+    .replace(/<[^>]*>/g, ' ');
 
-  const at = plain.indexOf('Примечание')
-  if (at < 0) return ''
+  const at = plain.indexOf('Примечание');
+  if (at < 0) return '';
 
-  // Примечание — одна строка: всё после перевода строки принадлежит странице
-  // (описанию и т.п.) и в пометки попадать не должно.
-  const nl = plain.indexOf('\n', at)
-  let text = (nl === -1 ? plain.slice(at) : plain.slice(at, nl)).replace(/\s+/g, ' ').trim()
+  // Строка с «Примечание» и следующие строки, похожие на расшифровку файлов.
+  // Конец примечания: пустая строка, строка без «файл/озвучка/субтитры» (пошло
+  // описание) или «!» — примечания этого сайта заканчиваются им.
+  const kept: string[] = [];
+  for (const rawLine of plain.slice(at, at + 4000).split('\n')) {
+    const line = rawLine.replace(/\s+/g, ' ').trim();
 
-  const stop = text.search(NOTE_STOP_RE)
-  if (stop > 0) text = text.slice(0, stop)
-  return text.slice(0, 1200)
+    if (line === '') {
+      if (kept.length > 0) break;
+      continue;
+    }
+    if (kept.length === 0) {
+      kept.push(line);
+      if (line.includes('!')) break;
+      continue;
+    }
+    if (!NOTE_LINE_RE.test(line)) break;
+
+    kept.push(line);
+    if (line.includes('!')) break;
+  }
+
+  let text = kept.join(' ');
+  const stop = text.search(NOTE_STOP_RE);
+  if (stop > 0) text = text.slice(0, stop);
+  return text.slice(0, 1200);
 }
 
 /** «1,2» → [1,2]; «1-4» → [1,2,3,4]; «9,10» → [9,10]. Диапазон длиннее 50 — мусор, обрываем. */
@@ -327,49 +361,59 @@ export async function getHentasisInfo(
   fetchPage: PageFetcher,
 ): Promise<HentasisInfo> {
   if (!/^https?:\/\//i.test(pageUrl)) {
-    throw new Error('Нужна ссылка на страницу тайтла, например https://hentasis1.top/985-….html')
+    throw new Error('Нужна ссылка на страницу тайтла, например https://hentasis1.top/985-….html');
   }
 
-  const html = await fetchPage(pageUrl)
+  const html = await fetchPage(pageUrl);
 
   const rawTitle =
     /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i.exec(html)?.[1] ??
-    /<title>([^<]*)<\/title>/i.exec(html)?.[1]
-  const rawPoster = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i.exec(
-    html,
-  )?.[1]
+    /<title>([^<]*)<\/title>/i.exec(html)?.[1];
+  const rawPoster =
+    /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i.exec(html)?.[1];
 
-  const raw = extractFiles(html, pageUrl)
-  if (raw.length === 0) {
+  const configs = extractConfigs(html, pageUrl);
+  const first = configs[0];
+  if (first === undefined) {
     throw new Error(
       'Видео на странице не нашлось: это не страница тайтла (или сайт отдал заглушку). ' +
         'Ссылка должна выглядеть так: https://hentasis1.top/1094-….html',
-    )
+    );
   }
 
-  // Нумерация примечания = порядок файлов плейлиста на сайте («Файл N»),
-  // который extractFiles сохраняет как есть.
-  const noteMap = parseHentasisNote(extractNoteText(html))
+  const noteMap = parseHentasisNote(extractNoteText(html));
 
-  const files: HentasisFile[] = raw.map((file, index) => {
-    const labeled = /^Файл\s*(\d+)$/i.exec(file.label ?? '')
-    const number = labeled !== null && labeled[1] !== undefined ? Number(labeled[1]) : index + 1
+  // Из нескольких конфигов берём настоящий плеер: тот, чьё число файлов совпадает
+  // с наибольшим номером примечания; без примечания — самый большой из конфигов.
+  let chosen = first;
+  if (configs.length > 1) {
+    let noteMax = 0;
+    for (const n of noteMap.keys()) if (n > noteMax) noteMax = n;
+
+    const byNote = noteMax > 0 ? configs.find((c) => c.files.length === noteMax) : undefined;
+    if (byNote !== undefined) chosen = byNote;
+    else for (const c of configs) if (c.files.length > chosen.files.length) chosen = c;
+  }
+
+  const files: HentasisFile[] = chosen.files.map((file, index) => {
+    const labeled = /^Файл\s*(\d+)$/i.exec(file.label ?? '');
+    const number = labeled !== null && labeled[1] !== undefined ? Number(labeled[1]) : index + 1;
 
     const built: HentasisFile = {
       label: file.label !== undefined && file.label !== '' ? file.label : `Файл ${index + 1}`,
       url: file.url,
       kind: classify(file.url),
-    }
-    const note = noteMap.get(number)
-    if (note !== undefined) built.note = note
-    return built
-  })
+    };
+    const note = noteMap.get(number);
+    if (note !== undefined) built.note = note;
+    return built;
+  });
 
   return {
     title: rawTitle === undefined ? undefined : clean(rawTitle),
     poster: rawPoster === undefined ? undefined : absolutize(rawPoster, pageUrl) || undefined,
     files,
-  }
+  };
 }
 
 /* ---------- Поиск тайтла по названиям ---------- */
@@ -494,35 +538,86 @@ function bestScore(titles: string[], candidates: string[]): number {
   return best
 }
 
+/** Страница именно с результатами поиска: у DLE их приметы одни и те же. Нужна обязательно:
+ * без проверки на «непоисковой» странице (главная, каталог) якорей на тайтлы полно,
+ * и они выдавали мусор вместо результатов. */
+function isSearchResults(html: string): boolean {
+  return /sres-wrap/i.test(html) || /По Вашему запросу найдено/i.test(html);
+}
+
 function extractHits(html: string, base: string, titles: string[]): HentasisHit[] {
-  const anchorRe = /<a\s[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi
-  const out: HentasisHit[] = []
-  const seen = new Set<string>()
+  const anchorRe = /<a\s[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  const out: HentasisHit[] = [];
+  const seen = new Set<string>();
 
-  let anchor: RegExpExecArray | null
+  let anchor: RegExpExecArray | null;
   while ((anchor = anchorRe.exec(html)) !== null) {
-    const url = absolutize(anchor[1] ?? '', base)
-    if (url === '' || seen.has(url)) continue
-    const path = url.replace(/^[a-z]+:\/\/[^/]+/i, '')
-    if (!TITLE_PAGE_RE.test(path)) continue
+    const url = absolutize(anchor[1] ?? '', base);
+    if (url === '' || seen.has(url)) continue;
+    const path = url.replace(/^[a-z]+:\/\/[^/]+/i, '');
+    if (!TITLE_PAGE_RE.test(path)) continue;
 
-    const anchorTitle = clean(stripTags(anchor[2] ?? ''))
-    const slugTitle = titleFromUrl(url)
-    if (anchorTitle === '' && slugTitle === '') continue
+    // Заголовок результата — в h2: остальной текст анкора (даты, описание) в имя не годится.
+    const inner = /<h2[^>]*>([\s\S]*?)<\/h2>/i.exec(anchor[2] ?? '');
+    const anchorTitle = clean(stripTags(inner === null ? (anchor[2] ?? '') : (inner[1] ?? '')));
+    const slugTitle = titleFromUrl(url);
+    if (anchorTitle === '' && slugTitle === '') continue;
 
-    seen.add(url)
+    seen.add(url);
     out.push({
       url,
       title: anchorTitle !== '' ? anchorTitle : slugTitle,
       score: bestScore(titles, [anchorTitle, slugTitle]),
-    })
-    if (out.length >= 60) break
+    });
+    if (out.length >= 60) break;
   }
 
-  // Сортировка до обрезки: ссылки меню и блоков страницы не должны
-  // вытеснять реальные результаты лимитом.
-  out.sort((a, b) => b.score - a.score)
-  return out.slice(0, 20)
+  out.sort((a, b) => b.score - a.score);
+  return out.slice(0, 20);
+}
+
+/** Выдача AJAX-подсказки поиска из шапки: JSON со ссылками и названиями. */
+function extractJsonHits(raw: string, base: string, titles: string[]): HentasisHit[] {
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+
+  const out: HentasisHit[] = [];
+  const seen = new Set<string>();
+
+  const visit = (node: unknown): void => {
+    if (out.length >= 20) return;
+
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item);
+      return;
+    }
+    if (node === null || typeof node !== 'object') return;
+
+    const record = node as Record<string, unknown>;
+    const rawUrl = record.link ?? record.url;
+    const title = record.title;
+    if (typeof rawUrl === 'string' && typeof title === 'string' && title.trim() !== '') {
+      const url = absolutize(rawUrl, base);
+      const path = url.replace(/^[a-z]+:\/\/[^/]+/i, '');
+      if (url !== '' && TITLE_PAGE_RE.test(path) && !seen.has(url)) {
+        seen.add(url);
+        const name = clean(title);
+        out.push({ url, title: name, score: bestScore(titles, [name, titleFromUrl(url)]) });
+      }
+    }
+
+    for (const value of Object.values(record)) {
+      if (value !== null && typeof value === 'object') visit(value);
+    }
+  };
+
+  visit(data);
+  out.sort((a, b) => b.score - a.score);
+  return out;
 }
 
 /** Удачный формат поиска запоминаем на домен: повторные запросы не перебирают варианты. */
@@ -540,20 +635,43 @@ interface SearchVariant {
   init?: PageRequestInit
 }
 
-/** Порядок: POST-форма DLE (штатный путь поиска), GET-вариант, AJAX-поиск из шапки
- * (обычно открыт даже когда полный поиск закрыт гостям), фолбэк «?s=». */
+
+
+interface SearchVariant {
+  kind: string;
+  url: string;
+  init?: PageRequestInit;
+}
+
+/** Формы поиска с сайта: GET полного поиска (с search_start/full_search, как в его форме),
+ * POST быстрого поиска (do/search/subaction/story на index.php и на корень — quicksearch
+ * шлёт на текущий адрес), AJAX-подсказка из шапки. Порядок — до первого удачного. */
 function searchVariants(base: string, query: string): SearchVariant[] {
-  const b = base.replace(/\/+$/, '')
-  const q = encodeURIComponent(query)
-  const form = `do=search&subaction=search&story=${q}`
+  const b = base.replace(/\/+$/, '');
+  const q = encodeURIComponent(query);
   const all: SearchVariant[] = [
-    { kind: 'dle-post', url: `${b}/index.php`, init: { method: 'POST', body: form } },
-    { kind: 'dle-get', url: `${b}/index.php?do=search&subaction=search&story=${q}` },
-    { kind: 'ajax', url: `${b}/engine/ajax/search.php`, init: { method: 'POST', body: `q=${q}` } },
-    { kind: 's', url: `${b}/?s=${q}` },
-  ]
-  const known = searchPathCache.get(b)
-  return known === undefined ? all : all.filter((v) => v.kind === known)
+    {
+      kind: 'dle-get',
+      url: `${b}/index.php?do=search&subaction=search&search_start=0&full_search=0&story=${q}`,
+    },
+    {
+      kind: 'dle-post',
+      url: `${b}/index.php`,
+      init: { method: 'POST', body: `do=search&subaction=search&story=${q}` },
+    },
+    {
+      kind: 'root-post',
+      url: `${b}/`,
+      init: { method: 'POST', body: `do=search&subaction=search&story=${q}` },
+    },
+    {
+      kind: 'ajax',
+      url: `${b}/engine/ajax/search.php`,
+      init: { method: 'POST', body: `q=${q}` },
+    },
+  ];
+  const known = searchPathCache.get(b);
+  return known === undefined ? all : all.filter((v) => v.kind === known);
 }
 
 export async function searchHentasis(
@@ -563,32 +681,41 @@ export async function searchHentasis(
   fetchPage: PageFetcher,
   delayMs = 0,
 ): Promise<{ hits: HentasisHit[]; fetched: number }> {
-  let fetched = 0
+  const b = base.replace(/\/+$/, '');
+  let fetched = 0;
 
   for (const variant of searchVariants(base, query)) {
-    if (fetched >= 3) break // на один запрос — не больше трёх страниц поиска
+    if (fetched >= 3) break;
+    if (fetched > 0 && delayMs > 0) await wait(delayMs + Math.round(Math.random() * 300));
+    fetched += 1;
 
-    if (fetched > 0 && delayMs > 0) {
-      await wait(delayMs + Math.round(Math.random() * 300))
-    }
-
-    fetched += 1
     try {
-      const html = await fetchPage(variant.url, variant.init)
-      const hits = extractHits(html, base, titles)
+      const body = await fetchPage(variant.url, variant.init);
+
+      let hits: HentasisHit[] = [];
+      if (variant.kind === 'ajax') {
+        hits = extractJsonHits(body, b, titles);
+      } else if (isSearchResults(body)) {
+        hits = extractHits(body, b, titles);
+      }
+      // Страница без примет выдачи — не результаты:Variant не считается удачным,
+      // пул не засоряется, пробуем следующий адрес.
+
       if (hits.length > 0) {
-        searchPathCache.set(base.replace(/\/+$/, ''), variant.kind)
-        return { hits, fetched }
+        searchPathCache.set(b, variant.kind);
+        return { hits, fetched };
       }
     } catch {
       // вариант не ответил — пробуем следующий
     }
   }
-  return { hits: [], fetched }
+  return { hits: [], fetched };
 }
 
 function sortPool(pool: Map<string, HentasisHit>): HentasisHit[] {
-  return [...pool.values()].sort((a, b) => b.score - a.score)
+  return [...pool.values()].sort(
+    (a, b) => b.score - a.score || a.title.length - b.title.length,
+  );
 }
 
 export async function autoFindHentasis(
