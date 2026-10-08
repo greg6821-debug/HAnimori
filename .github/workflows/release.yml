@@ -163,6 +163,7 @@ jobs:
       - name: Копия установщика под коротким именем
         shell: pwsh
         run: |
+          $name = (Get-Content src-tauri/tauri.conf.json -Raw -Encoding utf8 | ConvertFrom-Json).productName
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
           $setup = Get-ChildItem -Path src-tauri/target -Recurse -Filter *-setup.exe |
             Where-Object { $_.DirectoryName -match 'bundle\\nsis$' } |
@@ -170,7 +171,7 @@ jobs:
           if (-not $setup) {
             throw 'Установщик NSIS не найден — сборка что-то положила не туда'
           }
-          Copy-Item $setup.FullName artifacts/$($env:APP_NAME)_Setup.exe
+          Copy-Item $setup.FullName "artifacts/${name}_Setup.exe"
           Write-Host "Исходный артефакт: $($setup.FullName)"
 
       # Портабл-версия. Отдельной цели сборки под неё у Tauri нет: приложение — это один
