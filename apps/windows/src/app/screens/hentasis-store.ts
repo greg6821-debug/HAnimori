@@ -178,8 +178,7 @@ async function loadPage(url: string, remember: boolean): Promise<void> {
     }
 
     const saved = readLinks()[String(state.animeId)]
-    state.picked =
-      saved?.file !== undefined && saved.file < info.files.length ? saved.file : -1
+    state.picked = saved?.file !== undefined && saved.file < info.files.length ? saved.file : -1
   } catch (e: unknown) {
     state.trouble = say(e)
   } finally {
@@ -204,9 +203,7 @@ async function runSearch(): Promise<void> {
 
     const found = await autoFindHentasis(readBases(), buildSearchQueries(titles), titles, fetchPage)
 
-    state.others = found.candidates
-      .slice(0, 8)
-      .map(({ url, title }) => ({ url, title }))
+    state.others = found.candidates.slice(0, 8).map(({ url, title }) => ({ url, title }))
 
     if (found.best === null) {
       state.trouble = 'Похожего не нашлось. Попробуй другой домен или вставь ссылку сам.'

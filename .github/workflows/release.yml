@@ -30,7 +30,7 @@ permissions:
 jobs:
   release:
     env:
-      APP_NAME: HAniMori   # ← новое имя, = productName из tauri.conf.json
+      APP_NAME: HAniMori # ← новое имя, = productName из tauri.conf.json
     # Код настольного приложения лежит в apps/windows, а конвейер — в корне: GitHub читает
     # .github/workflows только оттуда. Каталог задаётся задачей, а не путями в командах.
     defaults:
