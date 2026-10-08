@@ -9,7 +9,7 @@ import {
   buildSearchQueries,
   getHentasisInfo,
   type HentasisFile,
-} from '@animori/core/api/hentasis' // ← путь до core такой же, как в player-view.ts
+} from '@/api/hentasis'
 
 const LINKS_KEY = 'animori:hentasis-links'
 const BASES_KEY = 'animori:hentasis-bases'
