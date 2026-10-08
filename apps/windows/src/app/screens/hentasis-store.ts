@@ -8,33 +8,24 @@ import {
   autoFindHentasis,
   buildSearchQueries,
   getHentasisInfo,
+  isTitlePageUrl,
   type HentasisFile,
+  type PageRequestInit,
 } from '@/api/hentasis'
 
 const LINKS_KEY = 'animori:hentasis-links'
 const BASES_KEY = 'animori:hentasis-bases'
 const DEFAULT_BASES = ['https://hentasis1.top']
 
-const ANILIST_QUERY = `
-query ($id: Int) {
-  Media(id: $id, type: ANIME) {
-    title { romaji english native }
-    synonyms
-  }
-}`
+import { fetchMediaCard } from '@/api/anilist-media'
+// Если у тебя импорт hentasis по другому пути (например, относительный на packages/core) —
+// сохрани свой путь, меняется только набор имён.
+import { peekRussianName, prefetchRussianNames } from '@/core/media-title'
+
 
 interface SavedLink {
   url: string
   file?: number
-}
-
-interface AniListMedia {
-  data?: {
-    Media?: {
-      title?: { romaji?: string; english?: string; native?: string }
-      synonyms?: string[]
-    }
-  }
 }
 
 export interface HentasisState {
@@ -45,6 +36,7 @@ export interface HentasisState {
   trouble: string
   matchedTitle: string
   matchedUrl: string
+  matchedScore: number
   manualUrl: string
   infoTitle: string
   files: HentasisFile[]
@@ -61,6 +53,7 @@ const state = reactive<HentasisState>({
   trouble: '',
   matchedTitle: '',
   matchedUrl: '',
+  matchedScore: 0,
   manualUrl: '',
   infoTitle: '',
   files: [],
@@ -68,8 +61,6 @@ const state = reactive<HentasisState>({
   open: false,
   others: [],
 })
-
-const titleCache = new Map<number, string[]>()
 
 function readLinks(): Record<string, SavedLink> {
   try {
@@ -96,62 +87,49 @@ function readBases(): string[] {
   }
 }
 
-function parseBases(text: string): string[] {
-  return text
-    .split(/[\s,;]+/)
-    .map((part) => part.trim().replace(/\/+$/, ''))
-    .filter((part) => /^https?:\/\//i.test(part))
-}
-
 function say(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
-/** HTML страницы: через Rust-сторону Tauri, чтобы CORS не мешал. Referer — от самого домена. */
-async function fetchPage(page: string): Promise<string> {
+/** HTML страницы: через Rust-сторону Tauri, чтобы CORS не мешал. POST нужен поиску DLE. */
+async function fetchPage(page: string, init?: PageRequestInit): Promise<string> {
   let referer = 'https://hentasis1.top/'
   try {
     referer = new URL(page).origin + '/'
   } catch {
     // оставить запасной
   }
+
+  const headers: Record<string, string> = {
+    Referer: referer,
+    'Accept-Language': 'ru,en;q=0.8',
+  }
+  if (init?.body !== undefined) headers['Content-Type'] = 'application/x-www-form-urlencoded'
+
   const res = await tauriFetch(page, {
-    headers: { Referer: referer, 'Accept-Language': 'ru,en;q=0.8' },
+    method: init?.method ?? 'GET',
+    headers,
+    body: init?.body,
   })
   if (!res.ok) throw new Error(`Сайт ответил HTTP ${res.status}`)
   return res.text()
 }
 
-/** Все названия тайтла с AniList: английское, ромадзи, японское и синонимы
- * (русское название обычно живёт среди синонимов). */
+/** Все названия тайтла тем же путём, что и весь плеер: карточка AniList + русское имя. */
 async function fetchTitles(mediaId: number): Promise<string[]> {
-  const cached = titleCache.get(mediaId)
-  if (cached !== undefined) return cached
+  const card = await fetchMediaCard(mediaId)
+  await prefetchRussianNames([mediaId]).catch(() => {})
 
-  const res = await tauriFetch('https://graphql.anilist.co', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ query: ANILIST_QUERY, variables: { id: mediaId } }),
-  })
-  if (!res.ok) throw new Error(`AniList ответил HTTP ${res.status}`)
-
-  const data = (await res.json()) as AniListMedia
-  const media = data.data?.Media
-  const titles = [
-    media?.title?.english,
-    media?.title?.romaji,
-    media?.title?.native,
-    ...(media?.synonyms ?? []),
-  ].filter((item): item is string => typeof item === 'string' && item.trim() !== '')
-
-  titleCache.set(mediaId, titles)
-  return titles
+  return [card?.english, card?.romaji, card?.native, peekRussianName(mediaId)].filter(
+    (t): t is string => typeof t === 'string' && t.trim() !== '',
+  )
 }
 
 function resetResult(): void {
   state.trouble = ''
   state.matchedTitle = ''
   state.matchedUrl = ''
+  state.matchedScore = 0
   state.infoTitle = ''
   state.files = []
   state.picked = -1
@@ -198,20 +176,23 @@ async function runSearch(): Promise<void> {
   try {
     const titles = await fetchTitles(state.animeId)
     if (titles.length === 0) {
-      throw new Error('AniList не дал названий для поиска — вставь ссылку сам.')
+      state.trouble = 'Не достал названия тайтла — поиск невозможен. Вставь ссылку на тайтл сам.'
+      return
     }
 
     const found = await autoFindHentasis(readBases(), buildSearchQueries(titles), titles, fetchPage)
-
     state.others = found.candidates.slice(0, 8).map(({ url, title }) => ({ url, title }))
 
     if (found.best === null) {
-      state.trouble = 'Похожего не нашлось. Попробуй другой домен или вставь ссылку сам.'
+      state.trouble =
+        `Похожего не нашлось (страниц поиска обошли: ${found.pages}). ` +
+        'Если страниц 0 — поиск сайта не отвечает: проверь домены или вставь ссылку на тайтл.'
       return
     }
 
     state.manualUrl = found.best.url
     await loadPage(found.best.url, true)
+    state.matchedScore = found.best.score
   } catch (e: unknown) {
     state.trouble = say(e)
   } finally {
@@ -241,14 +222,44 @@ function bindAnime(id: number): void {
 
 function setBases(text: string): void {
   state.basesText = text
-  localStorage.setItem(BASES_KEY, JSON.stringify(parseBases(text)))
+  const bases = text
+    .split(/[\s,;]+/)
+    .map((part) => part.trim().replace(/\/+$/, ''))
+    .filter((part) => /^https?:\/\//i.test(part))
+  localStorage.setItem(BASES_KEY, JSON.stringify(bases.length > 0 ? bases : [...DEFAULT_BASES]))
 }
 
+/** Одно поле на оба случая: ссылка на тайтл открывается как есть,
+ * домен (или что угодно иное) становится доменом поиска и запускает автопоиск. */
 async function useManual(): Promise<void> {
-  const url = state.manualUrl.trim()
-  if (url === '' || state.busy) return
-  resetResult()
-  await loadPage(url, true)
+  const raw = state.manualUrl.trim()
+  if (raw === '' || state.busy) return
+
+  if (isTitlePageUrl(raw)) {
+    resetResult()
+    await loadPage(raw, true)
+    state.matchedScore = 100
+    return
+  }
+
+  let origin = raw
+  try {
+    origin = new URL(raw).origin
+  } catch {
+    origin = ''
+  }
+  if (origin === '') {
+    state.trouble = 'Не похоже на адрес: нужен домен (https://hentasis1.top) или ссылка на тайтл.'
+    return
+  }
+
+  const bases = readBases()
+  if (!bases.includes(origin)) {
+    bases.unshift(origin)
+    localStorage.setItem(BASES_KEY, JSON.stringify(bases.slice(0, 6)))
+  }
+  state.basesText = readBases().join(', ')
+  await runSearch()
 }
 
 function useCandidate(url: string): void {
