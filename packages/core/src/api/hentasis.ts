@@ -150,7 +150,7 @@ function extractFiles(html: string, pageUrl: string): RawFile[] {
     const mediaRe = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8|m4v|webm)(?:\?[^\s"'`<>\\]*)?/gi;
     let media: RegExpExecArray | null;
     while ((media = mediaRe.exec(html)) !== null) {
-      pushUrl(media[0], undefined, pageUrl, out, seen);
+      pushUrl(media[0] ?? '', undefined, pageUrl, out, seen);
     }
   }
 
