@@ -60,6 +60,7 @@ watch(
     <p v-else-if="state.trouble !== ''" class="am-hx__note am-hx__note--err" role="alert">
       {{ state.trouble }}
     </p>
+    <p v-else-if="state.notice !== ''" class="am-hx__note" role="status">{{ state.notice }}</p>
     <p v-else-if="state.matchedTitle !== ''" class="am-hx__note" role="status">
       Нашёл: {{ state.matchedTitle }}
       <template v-if="state.matchedScore > 0"> (совпадение {{ state.matchedScore }}%)</template>
