@@ -1063,6 +1063,14 @@ watch(wide, (on) => {
   document.body.style.overflow = on ? 'hidden' : ''
 })
 
+// Кадр Hentasis открыт — основной плеер молчит: иначе звук идёт из-под слоя.
+watch(
+  () => hentasis.state.open,
+  (open) => {
+    if (open) pauseMainVideo()
+  },
+)
+
 onBeforeUnmount(() => {
   const el = videoEl.value
   if (el !== null) {
