@@ -179,24 +179,21 @@ jobs:
       - name: Портабл-архив
         shell: pwsh
         run: |
-          $exe = Get-ChildItem -Path src-tauri/target -Recurse -Filter ($env:APP_NAME + '.exe') |
+          $name = (Get-Content src-tauri/tauri.conf.json -Raw -Encoding utf8 | ConvertFrom-Json).productName
+          $exe = Get-ChildItem -Path src-tauri/target -Recurse -Filter ($name + '.exe') |
             Where-Object { $_.DirectoryName -match 'release$' } |
             Select-Object -First 1
           if (-not $exe) {
-            throw 'HAniMori.exe не найден в src-tauri/target'
+            throw "$name.exe не найден в src-tauri/target"
           }
           $version = '${{ steps.ver.outputs.version }}'
-          $stage = "portable/HAniMori_$version"
+          $stage = "portable/${name}_$version"
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Copy-Item $exe.FullName (Join-Path $stage 'HAniMori.exe')
+          Copy-Item $exe.FullName (Join-Path $stage "$name.exe")
           Copy-Item README.md (Join-Path $stage 'README.md')
-          # LICENSE один на репозиторий и лежит в его корне, а не рядом с приложением:
-          # им пользуются оба продукта.
           Copy-Item ../../LICENSE (Join-Path $stage 'LICENSE')
-          # Перечень зависимостей с лицензиями: MPL-2.0 требует уведомления, а портабл
-          # разбирают без репозитория под рукой — значит, перечень едет вместе с программой.
           Copy-Item ../../THIRD-PARTY.md (Join-Path $stage 'THIRD-PARTY.md')
-          Compress-Archive -Path "$stage/*" -DestinationPath "artifacts/$($env:APP_NAME)_${version}_x64-portable.zip" -Force
+          Compress-Archive -Path "$stage/*" -DestinationPath "artifacts/${name}_${version}_x64-portable.zip" -Force
           Write-Host "Портабл собран из: $($exe.FullName)"
 
       - name: Артефакты пробного прогона
