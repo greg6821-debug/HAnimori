@@ -520,7 +520,7 @@ async function onStreamDead(text: string, kind: DeadKind): Promise<void> {
 function pauseMainVideo(): void {
   videoEl.value?.pause()
 }
-  
+
 /** «Сначала»: человек не согласен с меткой. Забываем её, чтобы не спорить. */
 function doRestart(): void {
   if (veil.value) return

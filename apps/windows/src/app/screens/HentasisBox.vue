@@ -199,7 +199,9 @@ onBeforeUnmount(() => {
     </div>
 
     <p v-if="busy" class="am-hx__note" role="status">Читаю страницу Hentasis…</p>
-    <p v-else-if="trouble !== ''" class="am-hx__note am-hx__note--err" role="alert">{{ trouble }}</p>
+    <p v-else-if="trouble !== ''" class="am-hx__note am-hx__note--err" role="alert">
+      {{ trouble }}
+    </p>
     <p v-else-if="files.length > 0" class="am-hx__note" role="status">
       {{ infoTitle }} · файлов: {{ files.length }} · порядок как на сайте
     </p>
