@@ -62,7 +62,7 @@ async fn check(app: AppHandle) {
     let approved = app
         .dialog()
         .message(message)
-        .title("Обновление AniMori")
+        .title("Обновление HAniMori")
         .kind(MessageDialogKind::Info)
         .buttons(MessageDialogButtons::OkCancelCustom(
             "Установить".to_string(),
@@ -85,7 +85,7 @@ async fn check(app: AppHandle) {
             .message(format!(
                 "Не удалось установить версию {version}.\n\n{err}\n\nСкачайте установщик вручную со страницы релизов на GitHub."
             ))
-            .title("Обновление AniMori")
+            .title("Обновление HAniMori")
             .kind(MessageDialogKind::Error)
             .blocking_show();
         return;
