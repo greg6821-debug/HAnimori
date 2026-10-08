@@ -29,6 +29,8 @@ permissions:
 
 jobs:
   release:
+    env:
+      APP_NAME: HAniMori   # ← новое имя, = productName из tauri.conf.json
     # Код настольного приложения лежит в apps/windows, а конвейер — в корне: GitHub читает
     # .github/workflows только оттуда. Каталог задаётся задачей, а не путями в командах.
     defaults:
@@ -141,9 +143,9 @@ jobs:
           # tauri-action выпустил бы релиз с тегом `main`.
           tagName: ${{ inputs.tag || github.ref_name }}
           # Платформа в названии: оба продукта живут в одном репозитории, и без неё
-          # на странице Releases две строки «AniMori 3.1.0» не отличить. Название
+          # на странице Releases две строки «HAniMori 3.1.0» не отличить. Название
           # ничего не ломает — апдейтеры смотрят на тег, а не на него.
-          releaseName: AniMori ${{ steps.ver.outputs.version }} — Windows
+          releaseName: HAniMori ${{ steps.ver.outputs.version }} — Windows
           releaseBody: ${{ steps.notes.outputs.body }}
           # Черновик и предварительный релиз оба выключены: оба делают релиз невидимым для
           # подписчиков, а подписчик на Releases их не получает. Адрес `releases/latest`
@@ -168,7 +170,7 @@ jobs:
           if (-not $setup) {
             throw 'Установщик NSIS не найден — сборка что-то положила не туда'
           }
-          Copy-Item $setup.FullName artifacts/AniMori_Setup.exe
+          Copy-Item $setup.FullName artifacts/$($env:APP_NAME)_Setup.exe
           Write-Host "Исходный артефакт: $($setup.FullName)"
 
       # Портабл-версия. Отдельной цели сборки под неё у Tauri нет: приложение — это один
@@ -176,16 +178,16 @@ jobs:
       - name: Портабл-архив
         shell: pwsh
         run: |
-          $exe = Get-ChildItem -Path src-tauri/target -Recurse -Filter AniMori.exe |
+          $exe = Get-ChildItem -Path src-tauri/target -Recurse -Filter ($env:APP_NAME + '.exe') |
             Where-Object { $_.DirectoryName -match 'release$' } |
             Select-Object -First 1
           if (-not $exe) {
-            throw 'AniMori.exe не найден в src-tauri/target'
+            throw 'HAniMori.exe не найден в src-tauri/target'
           }
           $version = '${{ steps.ver.outputs.version }}'
-          $stage = "portable/AniMori_$version"
+          $stage = "portable/HAniMori_$version"
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Copy-Item $exe.FullName (Join-Path $stage 'AniMori.exe')
+          Copy-Item $exe.FullName (Join-Path $stage 'HAniMori.exe')
           Copy-Item README.md (Join-Path $stage 'README.md')
           # LICENSE один на репозиторий и лежит в его корне, а не рядом с приложением:
           # им пользуются оба продукта.
@@ -193,7 +195,7 @@ jobs:
           # Перечень зависимостей с лицензиями: MPL-2.0 требует уведомления, а портабл
           # разбирают без репозитория под рукой — значит, перечень едет вместе с программой.
           Copy-Item ../../THIRD-PARTY.md (Join-Path $stage 'THIRD-PARTY.md')
-          Compress-Archive -Path "$stage/*" -DestinationPath "artifacts/AniMori_${version}_x64-portable.zip" -Force
+          Compress-Archive -Path "$stage/*" -DestinationPath "artifacts/$($env:APP_NAME)_${version}_x64-portable.zip" -Force
           Write-Host "Портабл собран из: $($exe.FullName)"
 
       - name: Артефакты пробного прогона
@@ -215,8 +217,8 @@ jobs:
           # в apps/windows/artifacts. Без префикса шаг искал бы их в корне и
           # выпустил бы релиз без переименованного установщика и портабла.
           files: |
-            apps/windows/artifacts/AniMori_Setup.exe
-            apps/windows/artifacts/AniMori_*_x64-portable.zip
+            apps/windows/artifacts/HAniMori_Setup.exe
+            apps/windows/artifacts/HAniMori_*_x64-portable.zip
 
       # Канал обновлений Windows: отдельный релиз с постоянным именем, всегда указывающий на
       # последнюю сборку. Зачем он нужен: апдейтер читает адрес по имени, а `releases/latest`
@@ -256,7 +258,7 @@ jobs:
           gh release delete $channel --yes --cleanup-tag 2>$null
 
           gh release create $channel --target $sha --prerelease `
-            --title 'AniMori: канал обновлений Windows' `
+            --title 'HAniMori: канал обновлений Windows' `
             --notes 'Указатель на последний выпуск windows. Обновляется при каждом выпуске, вручную не править. Помечен предварительным, чтобы не занимать метку «последний выпуск» и не сбивать ручные ссылки на установщик.'
 
           # Манифест берём из вывода сборки того же прогона: он подписан тем же ключом, что и
