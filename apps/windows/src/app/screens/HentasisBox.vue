@@ -10,7 +10,7 @@ import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 import Hls from 'hls.js'
 
 // Путь до core — такой же, каким player-view.ts импортирует kodik/aniliberty.
-import { getHentasisInfo, type HentasisFile } from '@animori/core/api/hentasis' // ← ПОДСТАВЬ свой импорт
+import { getHentasisInfo, type HentasisFile } from '@/api/hentasis'
 
 const props = defineProps<{ animeId: number }>()
 
