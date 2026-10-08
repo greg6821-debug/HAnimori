@@ -18,7 +18,7 @@ import HentasisStage from './HentasisStage.vue'
 import { hentasis } from './hentasis-store'
 import EmptyMark from '../components/EmptyMark.vue'
 import { currentRoute } from '../router'
-
+import HentasisOthers from './HentasisOthers.vue'
 import { attachCast, type Cast, type CastState } from './player-cast'
 import { attachPlayback, type DeadKind, type Playback } from './player-hls'
 import {
@@ -1527,6 +1527,8 @@ onBeforeUnmount(() => {
             <HentasisBox :anime-id="mediaId" />
           </div>
         </aside>
+
+        <HentasisOthers v-if="!wide" />
       </div>
     </Teleport>
     <HentasisStage />
