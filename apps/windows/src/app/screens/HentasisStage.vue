@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Кадр Hentasis на сцене: растянут поверх основного плеера (absolute на .am-play__stage).
-// Источник переключает hentasis-store: бокс в списке ставит picked, здесь играем.
+// Кадр Hentasis: телепортируется в body и накрывает всё окно (fixed), поэтому его нельзя
+// случайно получить «маленьким окном» — где бы его ни вставили в шаблоне.
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 import Hls from 'hls.js'
@@ -64,40 +64,41 @@ onBeforeUnmount(destroyHls)
 </script>
 
 <template>
-  <div class="am-hxs" role="region" aria-label="Просмотр Hentasis">
-    <video
-      v-if="videoKind"
-      ref="videoEl"
-      class="am-hxs__media"
-      controls
-      autoplay
-      playsinline
-    ></video>
-    <iframe
-      v-else-if="active"
-      class="am-hxs__media"
-      :src="active.url"
-      title="Плеер Hentasis"
-      allow="autoplay; fullscreen; encrypted-media"
-      allowfullscreen
-      referrerpolicy="no-referrer"
-    ></iframe>
+  <Teleport to="body">
+    <div v-if="state.open" class="am-hxs" role="region" aria-label="Просмотр Hentasis">
+      <video
+        v-if="videoKind"
+        ref="videoEl"
+        class="am-hxs__media"
+        controls
+        autoplay
+        playsinline
+      ></video>
+      <iframe
+        v-else-if="active"
+        class="am-hxs__media"
+        :src="active.url"
+        title="Плеер Hentasis"
+        allow="autoplay; fullscreen; encrypted-media"
+        allowfullscreen
+        referrerpolicy="no-referrer"
+      ></iframe>
 
-    <div class="am-hxs__bar">
-      <span class="am-hxs__label">
-        {{ state.infoTitle !== '' ? state.infoTitle : 'Hentasis' }} · {{ active?.label ?? '—' }}
-      </span>
-      <button class="am-hxs__back" type="button" @click="hentasis.close()">Вернуться</button>
+      <div class="am-hxs__bar">
+        <span class="am-hxs__label">
+          {{ state.infoTitle !== '' ? state.infoTitle : 'Hentasis' }} · {{ active?.label ?? '—' }}
+        </span>
+        <button class="am-hxs__back" type="button" @click="hentasis.close()">Вернуться</button>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <style scoped>
 .am-hxs {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  /* Поверх всего в кадре, включая панель управления основным плеером. */
-  z-index: 60;
+  z-index: 2000;
   background: #000;
 }
 
@@ -119,10 +120,9 @@ onBeforeUnmount(destroyHls)
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   background: linear-gradient(rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0));
   color: #fff;
-  /* Прохождение щелчков сквозь градиент, но не мимо кнопки. */
   pointer-events: none;
 }
 
