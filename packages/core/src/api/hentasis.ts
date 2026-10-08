@@ -44,9 +44,11 @@ export interface HentasisFindOptions {
 }
 
 const DEFAULT_FIND: Required<HentasisFindOptions> = {
-  minScore: 40,
+  // Порог принятия: 65% — любая фразовая близость или совпадение большинства слов.
+  minScore: 65,
+  // С такого счёта поиск прекращаем сразу: запрос найден во названии страницы фразой.
   strongScore: 85,
-  maxRequests: 8,
+  maxRequests: 18,
 };
 
 /** Мусорные iframe: реклама и счётчики, не плееры. */
