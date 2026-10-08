@@ -1,83 +1,24 @@
 <script setup lang="ts">
-// Кадр Hentasis: телепортируется в body и накрывает всё окно (fixed), поэтому его нельзя
-// случайно получить «маленьким окном» — где бы его ни вставили в шаблоне.
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-
-import Hls from 'hls.js'
+// Слой Hentasis: только для iframe-файлов — их нельзя положить в <video>.
+// Видео-файлы играют в общем теге основного плеера, слой здесь не при чём.
+import { computed } from 'vue'
 
 import { hentasis } from './hentasis-store'
 
 const state = hentasis.state
 
-const active = computed(() => state.files[state.picked])
-const videoKind = computed(() => active.value !== undefined && active.value.kind !== 'iframe')
-
-const videoEl = ref<HTMLVideoElement | null>(null)
-
-let hls: Hls | null = null
-
-function destroyHls(): void {
-  hls?.destroy()
-  hls = null
-}
-
-async function attach(): Promise<void> {
-  destroyHls()
-  const file = active.value
-  if (!state.open || file === undefined || file.kind === 'iframe') return
-
-  await nextTick()
-  const el = videoEl.value
-  if (el === null) return
-
-  if (file.kind === 'hls') {
-    if (!Hls.isSupported()) {
-      state.trouble = 'HLS-поток в этом WebView не запускается — открой файл на сайте.'
-      return
-    }
-    hls = new Hls()
-    hls.loadSource(file.url)
-    hls.attachMedia(el)
-  } else {
-    el.src = file.url
-  }
-
-  void el.play().catch(() => {})
-}
-
-watch(
-  () => state.picked,
-  () => {
-    void attach()
-  },
-)
-
-watch(
-  () => state.open,
-  (open) => {
-    if (open) void attach()
-    else destroyHls()
-  },
-)
-
-onBeforeUnmount(destroyHls)
+const frame = computed(() => {
+  const file = state.files[state.picked]
+  return state.open && file !== undefined && file.kind === 'iframe' ? file : null
+})
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="state.open" class="am-hxs" role="region" aria-label="Просмотр Hentasis">
-      <video
-        v-if="videoKind"
-        ref="videoEl"
-        class="am-hxs__media"
-        controls
-        autoplay
-        playsinline
-      ></video>
+    <div v-if="frame !== null" class="am-hxs" role="region" aria-label="Просмотр Hentasis">
       <iframe
-        v-else-if="active"
         class="am-hxs__media"
-        :src="active.url"
+        :src="frame.url"
         title="Плеер Hentasis"
         allow="autoplay; fullscreen; encrypted-media"
         allowfullscreen
@@ -86,7 +27,7 @@ onBeforeUnmount(destroyHls)
 
       <div class="am-hxs__bar">
         <span class="am-hxs__label">
-          {{ state.infoTitle !== '' ? state.infoTitle : 'Hentasis' }} · {{ active?.label ?? '—' }}
+          {{ state.infoTitle !== '' ? state.infoTitle : 'Hentasis' }} · iframe
         </span>
         <button class="am-hxs__back" type="button" @click="hentasis.close()">Вернуться</button>
       </div>
@@ -108,7 +49,6 @@ onBeforeUnmount(destroyHls)
   height: 100%;
   border: 0;
   background: #000;
-  object-fit: contain;
 }
 
 .am-hxs__bar {
