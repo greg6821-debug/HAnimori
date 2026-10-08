@@ -13,7 +13,7 @@ import {
 } from 'vue'
 
 import { Logger } from '@/utils/logger'
-
+import HentasisBox from './HentasisBox.vue'
 import EmptyMark from '../components/EmptyMark.vue'
 import { currentRoute } from '../router'
 
@@ -516,6 +516,11 @@ async function onStreamDead(text: string, kind: DeadKind): Promise<void> {
   trouble.value = text
 }
 
+/** Hentasis играет своим кадром: главный ставим на паузу, чтобы шло только одно. */
+function pauseMainVideo(): void {
+  videoEl.value?.pause()
+}
+  
 /** «Сначала»: человек не согласен с меткой. Забываем её, чтобы не спорить. */
 function doRestart(): void {
   if (veil.value) return
