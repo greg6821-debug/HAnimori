@@ -962,6 +962,14 @@ function act(intent: PlayerIntent): void {
 
 /** Клавиатура и пульт: слушаем окно, потому что фокус бывает нигде. */
 function onKey(event: KeyboardEvent): void {
+  if (hentasis.state.open) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      hentasis.close()
+    }
+    return
+  }
+
   if (mediaId.value === 0) return
 
   const here = document.activeElement
@@ -1147,7 +1155,6 @@ onBeforeUnmount(() => {
           <!-- Двойного щелчка по кадру нет нарочно: по кадру щёлкают ради паузы,
                и второй щелчок менял размер окна вместо ожидаемого. -->
           <div class="am-play__stage">
-            <HentasisStage v-if="hentasis.state.open" />
             <video ref="videoEl" class="am-play__frame" playsinline preload="metadata"></video>
 
             <button
@@ -1438,6 +1445,7 @@ onBeforeUnmount(() => {
         </aside>
       </div>
     </Teleport>
+    <HentasisStage />
   </section>
 </template>
 
