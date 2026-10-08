@@ -229,6 +229,20 @@ function setBases(text: string): void {
   localStorage.setItem(BASES_KEY, JSON.stringify(bases.length > 0 ? bases : [...DEFAULT_BASES]))
 }
 
+
+/** Домен из сырой строки; без схемы пробуем https:// сами. Пусто — не адрес вовсе. */
+function originOf(raw: string): string {
+  try {
+    return new URL(raw).origin
+  } catch {
+    try {
+      return new URL(`https://${raw}`).origin
+    } catch {
+      return ''
+    }
+  }
+}
+
 /** Одно поле на оба случая: ссылка на тайтл открывается как есть,
  * домен (или что угодно иное) становится доменом поиска и запускает автопоиск. */
 async function useManual(): Promise<void> {
@@ -242,12 +256,7 @@ async function useManual(): Promise<void> {
     return
   }
 
-  let origin = raw
-  try {
-    origin = new URL(raw).origin
-  } catch {
-    origin = ''
-  }
+  const origin = originOf(raw)
   if (origin === '') {
     state.trouble = 'Не похоже на адрес: нужен домен (https://hentasis1.top) или ссылка на тайтл.'
     return
