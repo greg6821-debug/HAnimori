@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // Бокс источника Hentasis (18+) в списке сбоку: домены, автопоиск по названиям,
-// ручная ссылка и выбор файла. Кадр играет на весь экран (HentasisStage).
-import { watch } from 'vue'
+// ручная ссылка и выбор файла. Кадр играет в общем теге основного плеера.
+import { computed, watch } from 'vue'
+
+import type { HentasisFile } from '@/api/hentasis'
 
 import { hentasis } from './hentasis-store'
 
@@ -14,6 +16,33 @@ watch(
   (id) => hentasis.bindAnime(id),
   { immediate: true },
 )
+
+/** Есть ли пометки хоть у одного файла: без них рисуем простую оборку, как раньше. */
+const hasNotes = computed<boolean>(() => state.files.some((file) => file.note !== undefined))
+
+/** Группа = подряд идущие файлы с одинаковой пометкой; у файлов без пометок
+ * группа своя у каждого (пустая строка не склеивает их в один ряд). */
+interface FileGroup {
+  note: string
+  items: { file: HentasisFile; index: number }[]
+}
+
+const groups = computed<FileGroup[]>(() => {
+  const out: FileGroup[] = []
+
+  for (let i = 0; i < state.files.length; i += 1) {
+    const file = state.files[i]
+    if (file === undefined) continue
+
+    const note = file.note ?? ''
+    const last = out[out.length - 1]
+
+    if (last !== undefined && last.note === note) last.items.push({ file, index: i })
+    else out.push({ note, items: [{ file, index: i }] })
+  }
+
+  return out
+})
 </script>
 
 <template>
@@ -34,12 +63,7 @@ watch(
     </label>
 
     <div class="am-hx__row">
-      <button
-        class="am-hx__save"
-        type="button"
-        :disabled="state.busy"
-        @click="hentasis.runSearch()"
-      >
+      <button class="am-hx__save" type="button" :disabled="state.busy" @click="hentasis.runSearch()">
         Искать по названию
       </button>
       <button
@@ -94,7 +118,8 @@ watch(
       </span>
     </label>
 
-    <div v-if="state.files.length > 0" class="am-hx__files">
+    <!-- Без пометок — простая оборка кнопок, как раньше. -->
+    <div v-if="state.files.length > 0 && !hasNotes" class="am-hx__files">
       <button
         v-for="(file, index) in state.files"
         :key="file.url"
@@ -107,18 +132,21 @@ watch(
       </button>
     </div>
 
-    <div v-if="state.files.length > 0" class="am-hx__files">
-      <button
-        v-for="(file, index) in state.files"
-        :key="file.url"
-        class="am-hx__file"
-        :class="{ 'am-hx__file--on': index === state.picked }"
-        type="button"
-        @click="hentasis.play(index)"
-      >
-        <span>{{ file.label }}</span>
-        <span v-if="file.note" class="am-hx__file-note">{{ file.note }}</span>
-      </button>
+    <!-- С пометками — группы подряд идущих одинаковых пометок, каждая группа в своей строке. -->
+    <div v-else-if="state.files.length > 0" class="am-hx__groups">
+      <div v-for="(group, gi) in groups" :key="gi" class="am-hx__group">
+        <button
+          v-for="item in group.items"
+          :key="item.file.url"
+          class="am-hx__filecard"
+          :class="{ 'am-hx__filecard--on': item.index === state.picked }"
+          type="button"
+          @click="hentasis.play(item.index)"
+        >
+          <span>{{ item.file.label }}</span>
+          <span v-if="item.file.note" class="am-hx__file-note">{{ item.file.note }}</span>
+        </button>
+      </div>
     </div>
 
     <a
@@ -200,22 +228,15 @@ watch(
   color: #ff8080;
 }
 
-.am-hx__files {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
+/* Обычная однострочная кнопка: ею пользуются и «Забыть», и файлы без пометок. */
 .am-hx__file {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-}
-
-.am-hx__file-note {
-  font-size: 11px;
-  opacity: 0.7;
+  border: 1px solid #2b2b3d;
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: #16161f;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
 }
 
 .am-hx__file:disabled {
@@ -227,21 +248,44 @@ watch(
   background: #2a1215;
 }
 
-.am-hx__others {
+/* Карточка файла с пометкой: две строки, текст сверху вниз. */
+.am-hx__filecard {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.am-hx__other {
-  border: 0;
-  padding: 4px 0;
-  background: none;
-  color: #8ab4ff;
-  text-align: left;
+  align-items: flex-start;
+  gap: 2px;
+  border: 1px solid #2b2b3d;
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: #16161f;
+  color: inherit;
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  text-align: left;
+}
+
+.am-hx__filecard--on {
+  border-color: #e5484d;
+  background: #2a1215;
+}
+
+.am-hx__file-note {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* Группы: столбик строк с зазором ~1/3 высоты кнопки (кнопка ~30px → 10px);
+   внутри группы свои кнопки переносятся, но чужие в строку не попадают. */
+.am-hx__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.am-hx__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .am-hx__link {
