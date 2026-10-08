@@ -34,7 +34,12 @@ watch(
     </label>
 
     <div class="am-hx__row">
-      <button class="am-hx__save" type="button" :disabled="state.busy" @click="hentasis.runSearch()">
+      <button
+        class="am-hx__save"
+        type="button"
+        :disabled="state.busy"
+        @click="hentasis.runSearch()"
+      >
         Искать по названию
       </button>
       <button

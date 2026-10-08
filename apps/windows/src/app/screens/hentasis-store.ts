@@ -22,7 +22,6 @@ import { fetchMediaCard } from '@/api/anilist-media'
 // сохрани свой путь, меняется только набор имён.
 import { peekRussianName, prefetchRussianNames } from '@/core/media-title'
 
-
 interface SavedLink {
   url: string
   file?: number
@@ -228,7 +227,6 @@ function setBases(text: string): void {
     .filter((part) => /^https?:\/\//i.test(part))
   localStorage.setItem(BASES_KEY, JSON.stringify(bases.length > 0 ? bases : [...DEFAULT_BASES]))
 }
-
 
 /** Домен из сырой строки; без схемы пробуем https:// сами. Пусто — не адрес вовсе. */
 function originOf(raw: string): string {
