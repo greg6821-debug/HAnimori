@@ -41,15 +41,17 @@ export interface PageRequestInit {
 export type PageFetcher = (url: string, init?: PageRequestInit) => Promise<string>
 
 export interface HentasisFindOptions {
-  minScore?: number
-  strongScore?: number
-  maxRequests?: number
+  minScore?: number;
+  strongScore?: number;
+  maxRequests?: number;
+  /** Год выпуска с AniList: кандидаты с совпавшим годом получают буст при ранжировании. */
+  year?: number;
 }
 
 const DEFAULT_FIND: Required<HentasisFindOptions> = {
   minScore: 65,
   strongScore: 85,
-  maxRequests: 18,
+  maxRequests: 24,
 }
 
 /** Адрес страницы тайтла на DLE: /1094-onaji-zemi-no-someya-san.html */
@@ -244,52 +246,91 @@ function tokensOf(normalized: string): string[] {
 }
 
 export function scoreTitleMatch(query: string, title: string): number {
-  const q = normalizeTitle(query)
-  const t = normalizeTitle(title)
-  if (q === '' || t === '') return 0
-  if (q === t) return 100
-  if (t.includes(q)) return 95
-  if (q.includes(t) && t.length >= 4) return 85
+  const q = normalizeTitle(query);
+  const t = normalizeTitle(title);
+  if (q === '' || t === '') return 0;
+  if (q === t) return 100;
+  if (t.includes(q)) return 95;
+  if (q.includes(t) && t.length >= 4) return 85;
 
-  const qw = tokensOf(q)
-  if (qw.length === 0) return 0
-  const tw = new Set(tokensOf(t))
-  let hits = 0
-  for (const word of qw) {
-    if (tw.has(word)) hits += 1
+  const qw = tokensOf(q);
+  const tw = tokensOf(t);
+  if (qw.length === 0 || tw.length === 0) return 0;
+
+  // Склейки соседних слов: ромадзи на двух сайтах различается пробелами
+  // («Tsurete kita» на сайте и «Tsuretekita» у нас — одно и то же слово).
+  const tTokens = new Set(tw);
+  const tGlued = new Set<string>();
+  for (let i = 0; i < tw.length - 1; i += 1) {
+    const glued = `${tw[i]}${tw[i + 1]}`;
+    if (glued.length > 2) tGlued.add(glued);
   }
-  if (hits === 0) return 0
-  return Math.min(84, Math.round((hits / qw.length) * 100))
+
+  let covered = 0;
+  for (let i = 0; i < qw.length; i += 1) {
+    const word = qw[i];
+    if (tTokens.has(word) || tGlued.has(word)) {
+      covered += 1;
+      continue;
+    }
+
+    // Слово запроса не нашлось само — вдруг оно склейка двух соседних слов титула.
+    const next = qw[i + 1];
+    if (next !== undefined && tTokens.has(word + next)) {
+      covered += 2;
+      i += 1;
+    }
+  }
+
+  if (covered === 0) return 0;
+
+  // Все слова запроса нашлись (пусть и через склейки) — почти наверняка тот же тайтл:
+  // останавливаем поиск, как при фразовом совпадении.
+  if (covered >= qw.length && qw.length >= 3) return 85;
+
+  return Math.min(84, Math.round((covered / qw.length) * 100));
 }
 
-export function buildSearchQueries(titles: string[], limit = 20): string[] {
-  const seen = new Set<string>()
-  const full: string[] = []
-  const partial: string[] = []
+export function buildSearchQueries(titles: string[], limit = 24): string[] {
+  const seen = new Set<string>();
+  const full: string[] = [];
+  const partial: string[] = [];
 
   const add = (pool: string[], raw: string): void => {
     const q = raw
       .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
       .replace(/\s+/g, ' ')
-      .trim()
-    if (q.length < 3) return
-    const key = normalizeTitle(q)
-    if (key === '' || seen.has(key)) return
-    seen.add(key)
-    pool.push(q)
-  }
+      .trim();
+    if (q.length < 3) return;
+    const key = normalizeTitle(q);
+    if (key === '' || seen.has(key)) return;
+    seen.add(key);
+    pool.push(q);
+  };
 
-  for (const title of titles) add(full, title)
+  // 1) каждое название целиком — английское, ромадзи, японское и русское.
+  for (const title of titles) add(full, title);
 
+  // 2) совпадающие части: названия длиннее нескольких слов DLE в режиме «все слова»
+  //    не находит — достаточно одного несовпавшего слова, и выдача пустая.
   for (const title of titles) {
-    const words = normalizeTitle(title).split(' ').filter(Boolean)
-    if (words.length > 3) add(partial, words.slice(0, 3).join(' '))
-    if (words.length > 2) add(partial, words.slice(0, 2).join(' '))
-    const longest = words.filter((w) => w.length >= 5).sort((a, b) => b.length - a.length)[0]
-    if (longest !== undefined && words.length > 1) add(partial, longest)
+    const words = normalizeTitle(title).split(' ').filter(Boolean);
+    if (words.length > 3) add(partial, words.slice(0, 3).join(' '));
+    if (words.length > 2) add(partial, words.slice(0, 2).join(' '));
+
+    const longest = words.filter((w) => w.length >= 5).sort((a, b) => b.length - a.length)[0];
+    if (longest !== undefined && words.length > 1) {
+      add(partial, longest);
+
+      // Префиксы самого длинного слова: слитное ромадзи на сайте бывает раздельным
+      // («Otomedori» → «otome dori»), а поиск DLE идёт по словам — префикс «otome»
+      // находит и слитное, и раздельное написание.
+      if (longest.length > 5) add(partial, longest.slice(0, 5));
+      if (longest.length > 4) add(partial, longest.slice(0, 4));
+    }
   }
 
-  return [...full, ...partial].slice(0, limit)
+  return [...full, ...partial].slice(0, limit);
 }
 
 function titleFromUrl(url: string): string {
@@ -413,12 +454,24 @@ export async function autoFindHentasis(
       requests += 1
 
       try {
-        const { hits, fetched } = await searchHentasis(base, query, titles, fetchPage)
-        pages += fetched
+        const { hits, fetched } = await searchHentasis(base, query, titles, fetchPage);
+        pages += fetched;
 
         for (const hit of hits) {
-          const known = pool.get(hit.url)
-          if (known === undefined || hit.score > known.score) pool.set(hit.url, hit)
+          let score = hit.score;
+
+          // Год с AniList: совпал с годом на странице — кандидат надёжнее (+5).
+          if (opts.year !== undefined) {
+            const withYear = normalizeTitle(hit.title)
+              .split(' ')
+              .some((token) => token.startsWith(String(opts.year)));
+            if (withYear) score = Math.min(99, score + 5);
+          }
+
+          const known = pool.get(hit.url);
+          if (known === undefined || score > known.score) {
+            pool.set(hit.url, { ...hit, score });
+          }
         }
       } catch {
         // поиск не ответил — считаем запрос израсходованным и идём дальше
