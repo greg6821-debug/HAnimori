@@ -176,79 +176,114 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="am-hx">
-    <div class="am-hx__row">
+    <label class="am-hx__field">
+      <span class="am-hx__cap">Домены для поиска (через запятую)</span>
       <input
-        v-model="url"
+        v-model="state.basesText"
         class="am-hx__url"
-        type="url"
-        inputmode="url"
+        type="text"
         spellcheck="false"
         autocomplete="off"
-        placeholder="https://hentasis1.top/985-….html"
-        aria-label="Адрес страницы Hentasis"
+        placeholder="https://hentasis1.top"
+        aria-label="Домены Hentasis"
         @keydown.stop
+        @change="hentasis.setBases(state.basesText)"
       />
+    </label>
+
+    <div class="am-hx__row">
+      <button class="am-hx__save" type="button" :disabled="state.busy" @click="hentasis.runSearch()">
+        Искать по названию
+      </button>
       <button
-        class="am-hx__save"
+        v-if="state.manualUrl !== ''"
+        class="am-hx__file"
         type="button"
-        :disabled="busy || url.trim() === ''"
-        @click="saveAndLoad"
+        :disabled="state.busy"
+        @click="hentasis.forget()"
       >
-        Сохранить
+        Забыть
       </button>
     </div>
 
-    <p v-if="busy" class="am-hx__note" role="status">Читаю страницу Hentasis…</p>
-    <p v-else-if="trouble !== ''" class="am-hx__note am-hx__note--err" role="alert">
-      {{ trouble }}
+    <p v-if="state.busy && state.phase === 'search'" class="am-hx__note" role="status">
+      Ищу тайтл по названиям с AniList…
     </p>
-    <p v-else-if="files.length > 0" class="am-hx__note" role="status">
-      {{ infoTitle }} · файлов: {{ files.length }} · порядок как на сайте
+    <p v-else-if="state.busy" class="am-hx__note" role="status">Читаю страницу…</p>
+    <p v-else-if="state.trouble !== ''" class="am-hx__note am-hx__note--err" role="alert">
+      {{ state.trouble }}
+    </p>
+    <p v-else-if="state.matchedTitle !== ''" class="am-hx__note" role="status">
+      Нашёл: {{ state.matchedTitle }}
+      <template v-if="state.matchedScore > 0"> (совпадение {{ state.matchedScore }}%)</template>
     </p>
     <p v-else class="am-hx__note">
-      Ссылка на страницу тайтла с Hentasis — и «Сохранить»: файлы появятся здесь же.
+      Найду страницу сам по названиям с AniList — или вставь ниже домен/ссылку.
     </p>
 
-    <div v-if="files.length > 0" class="am-hx__files">
+    <label class="am-hx__field">
+      <span class="am-hx__cap">Домен или ссылка на тайтл</span>
+      <span class="am-hx__row">
+        <input
+          v-model="state.manualUrl"
+          class="am-hx__url"
+          type="text"
+          inputmode="url"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="https://hentasis1.top или https://…/1094-….html"
+          aria-label="Домен или ссылка на страницу Hentasis"
+          @keydown.stop
+        />
+        <button
+          class="am-hx__save"
+          type="button"
+          :disabled="state.busy || state.manualUrl.trim() === ''"
+          @click="hentasis.useManual()"
+        >
+          Открыть
+        </button>
+      </span>
+    </label>
+
+    <div v-if="state.files.length > 0" class="am-hx__files">
       <button
-        v-for="(file, index) in files"
+        v-for="(file, index) in state.files"
         :key="file.url"
         class="am-hx__file"
-        :class="{ 'am-hx__file--on': index === picked }"
+        :class="{ 'am-hx__file--on': index === state.picked }"
         type="button"
-        @click="play(index)"
+        @click="hentasis.play(index)"
       >
         {{ file.label }}
       </button>
     </div>
 
-    <div v-if="frame === 'video'" class="am-hx__stage">
-      <video
-        ref="videoEl"
-        class="am-hx__frame"
-        controls
-        playsinline
-        preload="metadata"
-        referrerpolicy="no-referrer"
-      ></video>
-    </div>
-    <div v-else-if="frame === 'iframe'" class="am-hx__stage">
-      <iframe
-        class="am-hx__frame"
-        :src="frameSrc"
-        title="Плеер Hentasis"
-        allow="autoplay; fullscreen; encrypted-media"
-        allowfullscreen
-        referrerpolicy="no-referrer"
-      ></iframe>
+    <div v-if="state.others.length > 1" class="am-hx__others">
+      <span class="am-hx__cap">Другие совпадения</span>
+      <button
+        v-for="other in state.others"
+        :key="other.url"
+        class="am-hx__other"
+        type="button"
+        :disabled="state.busy"
+        @click="hentasis.useCandidate(other.url)"
+      >
+        {{ other.title }}
+      </button>
     </div>
 
-    <p v-if="url.trim() !== ''" class="am-hx__open">
-      <a :href="url" target="_blank" rel="noreferrer noopener">Открыть на сайте ↗</a>
-    </p>
+    <a
+      v-if="state.matchedUrl !== ''"
+      class="am-hx__link"
+      :href="state.matchedUrl"
+      target="_blank"
+      rel="noreferrer noopener"
+    >
+      Открыть страницу на сайте ↗
+    </a>
   </div>
 </template>
-
 <style scoped>
 /* Цвета взяты нейтральные — при желании подгони под палитру приложения. */
 .am-hx {
