@@ -674,48 +674,147 @@ function searchVariants(base: string, query: string): SearchVariant[] {
   return known === undefined ? all : all.filter((v) => v.kind === known);
 }
 
+
+/** Страница выдачи с чужим search_start: GET — параметром, POST — в теле формы,
+ * как это делает полный поиск сайта. */
+function searchPageVariant(
+  variant: SearchVariant,
+  base: string,
+  query: string,
+  start: number,
+): SearchVariant {
+  const q = encodeURIComponent(query);
+  const paging = `search_start=${start}&full_search=0`;
+
+  if (variant.kind === 'dle-get') {
+    return {
+      kind: variant.kind,
+      url: `${base}/index.php?do=search&subaction=search&${paging}&story=${q}`,
+    };
+  }
+
+  return {
+    kind: variant.kind,
+    url: variant.url,
+    init: { method: 'POST', body: `do=search&subaction=search&${paging}&story=${q}` },
+  };
+}
+
+export interface SearchPagesOptions {
+  /** Пауза между обращениями, мс (+до 300 разброса). */
+  delayMs?: number;
+  /** Сколько страниц выдачи можно взять на этот вызов, включая первую. */
+  pagesBudget?: number;
+  /** С таким баллом пагинацию не трогаем: совпадение уже явное. */
+  strongScore?: number;
+}
+
+/** Поиск: первый отозвавшийся формат выдачи, затем его пагинация — пока не встретится
+ * сильное совпадение, не кончится бюджет страниц или сама пагинация. */
 export async function searchHentasis(
   base: string,
   query: string,
   titles: string[],
   fetchPage: PageFetcher,
-  delayMs = 0,
+  options: SearchPagesOptions = {},
 ): Promise<{ hits: HentasisHit[]; fetched: number }> {
   const b = base.replace(/\/+$/, '');
+  const opts = { delayMs: 0, pagesBudget: 1, strongScore: 85, ...options };
+
+  const pause = async (): Promise<void> => {
+    if (opts.delayMs > 0) await wait(opts.delayMs + Math.round(Math.random() * 300));
+  };
+
+  let cumulative: HentasisHit[] = [];
   let fetched = 0;
 
   for (const variant of searchVariants(base, query)) {
-    if (fetched >= 3) break;
-    if (fetched > 0 && delayMs > 0) await wait(delayMs + Math.round(Math.random() * 300));
+    if (fetched >= opts.pagesBudget) break;
+    if (fetched > 0) await pause();
     fetched += 1;
 
-    try {
-      const body = await fetchPage(variant.url, variant.init);
+    const body = await fetchPage(variant.url, variant.init).catch(() => '');
+    if (body === '') continue;
 
-      let hits: HentasisHit[] = [];
-      if (variant.kind === 'ajax') {
-        hits = extractJsonHits(body, b, titles);
-      } else if (isSearchResults(body)) {
-        hits = extractHits(body, b, titles);
-      }
-      // Страница без примет выдачи — не результаты:Variant не считается удачным,
-      // пул не засоряется, пробуем следующий адрес.
+    let firstHits: HentasisHit[] = [];
+    if (variant.kind === 'ajax') firstHits = extractJsonHits(body, b, titles);
+    else if (isSearchResults(body)) firstHits = extractHits(body, b, titles);
 
-      if (hits.length > 0) {
-        searchPathCache.set(b, variant.kind);
-        return { hits, fetched };
-      }
-    } catch {
-      // вариант не ответил — пробуем следующий
+    if (firstHits.length === 0) continue;
+
+    searchPathCache.set(b, variant.kind);
+    cumulative = mergeHits(cumulative, firstHits);
+    if ((cumulative[0]?.score ?? 0) >= opts.strongScore) {
+      return { hits: cumulative, fetched };
     }
+
+    // У подсказки из шапки страниц нет; у полного поиска — есть.
+    if (variant.kind === 'ajax') return { hits: cumulative, fetched };
+
+    let currentStart = 0;
+    const visited = new Set<number>([0]);
+    const queue = extractSearchStarts(body);
+
+    while (queue.length > 0 && fetched < opts.pagesBudget) {
+      const start = queue.shift();
+      if (start === undefined || visited.has(start) || start <= currentStart) continue;
+      visited.add(start);
+      currentStart = start;
+
+      await pause();
+      fetched += 1;
+
+      const page = searchPageVariant(variant, b, query, start);
+      const pageHtml = await fetchPage(page.url, page.init).catch(() => '');
+      if (pageHtml === '' || !isSearchResults(pageHtml)) break;
+
+      const pageHits = extractHits(pageHtml, b, titles);
+      if (pageHits.length === 0) break;
+
+      cumulative = mergeHits(cumulative, pageHits);
+      if ((cumulative[0]?.score ?? 0) >= opts.strongScore) {
+        return { hits: cumulative, fetched };
+      }
+
+      for (const next of extractSearchStarts(pageHtml)) {
+        if (!visited.has(next)) queue.push(next);
+      }
+    }
+
+    return { hits: cumulative, fetched };
   }
-  return { hits: [], fetched };
+
+  return { hits: cumulative, fetched };
 }
 
 function sortPool(pool: Map<string, HentasisHit>): HentasisHit[] {
   return [...pool.values()].sort(
     (a, b) => b.score - a.score || a.title.length - b.title.length,
   );
+}
+
+
+/** Значения search_start из пагинации выдачи: ровно те, что подставляет собственный
+ * скрипт сайта (list_submit(2) → search_start=2 для страницы 2). Отрицательные — служебные. */
+function extractSearchStarts(html: string): number[] {
+  const out = new Set<number>();
+  const re = /list_submit\((-?\d+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const n = Number.parseInt(m[1] ?? '', 10);
+    if (Number.isFinite(n) && n > 0) out.add(n);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+/** Слияние находок со страниц: по одному представлению на адрес, балл берётся больший. */
+function mergeHits(into: HentasisHit[], add: HentasisHit[]): HentasisHit[] {
+  const map = new Map<string, HentasisHit>();
+  for (const hit of [...into, ...add]) {
+    const known = map.get(hit.url);
+    if (known === undefined || hit.score > known.score) map.set(hit.url, hit);
+  }
+  return sortPool(map);
 }
 
 export async function autoFindHentasis(
@@ -739,26 +838,30 @@ export async function autoFindHentasis(
       }
 
       try {
-        const { hits, fetched } = await searchHentasis(base, query, titles, fetchPage, opts.delayMs)
-        pages += fetched
+        const { hits, fetched } = await searchHentasis(base, query, titles, fetchPage, {
+          delayMs: opts.delayMs,
+          pagesBudget: Math.max(0, opts.maxPages - pages),
+          strongScore: opts.strongScore,
+        });
+        pages += fetched;
 
         for (const hit of hits) {
-          let score = hit.score
+          let score = hit.score;
 
           if (opts.year !== undefined) {
             const withYear = normalizeTitle(hit.title)
               .split(' ')
-              .some((token) => token.startsWith(String(opts.year)))
-            if (withYear) score = Math.min(99, score + 5)
+              .some((token) => token.startsWith(String(opts.year)));
+            if (withYear) score = Math.min(99, score + 5);
           }
 
-          const known = pool.get(hit.url)
+          const known = pool.get(hit.url);
           if (known === undefined || score > known.score) {
-            pool.set(hit.url, { ...hit, score })
+            pool.set(hit.url, { ...hit, score });
           }
         }
       } catch {
-        // поиск не ответил — идём дальше
+        // поиск не ответил — считаем запрос израсходованным и идём дальше
       }
 
       const best = sortPool(pool)[0]
