@@ -229,9 +229,7 @@ function aboutSpot(key: string): WatchWhat {
   if (parts !== null && parts.voiceKey === 'hx') {
     const file = hentasis.state.files[parts.episode - 1]
     const label =
-      file !== undefined && file.note !== undefined
-        ? `Hentasis · ${file.note}`
-        : 'Hentasis'
+      file !== undefined && file.note !== undefined ? `Hentasis · ${file.note}` : 'Hentasis'
 
     return { title: mainTitle.value, cover: cover.value, voiceLabel: label }
   }
