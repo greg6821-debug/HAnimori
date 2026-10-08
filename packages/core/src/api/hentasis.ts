@@ -417,12 +417,9 @@ export async function autoFindHentasis(
       if (requests >= opts.maxRequests) break
       requests += 1
 
-      let hits: HentasisHit[] = []
-      try {
-        hits = await searchHentasis(base, query, titles, fetchPage)
-      } catch {
-        hits = []
-      }
+      const hits: HentasisHit[] = await searchHentasis(base, query, titles, fetchPage).catch(
+        () => [],
+      );
 
       for (const hit of hits) {
         const known = pool.get(hit.url)
