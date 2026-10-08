@@ -224,6 +224,18 @@ let spot = ''
  * поэтому серия и подпись озвучки берутся из самого ключа. */
 function aboutSpot(key: string): WatchWhat {
   const parts = splitSpot(key)
+
+  // Файл Hentasis: среди озвучек его нет, подпись — метка источника и пометка файла.
+  if (parts !== null && parts.voiceKey === 'hx') {
+    const file = hentasis.state.files[parts.episode - 1]
+    const label =
+      file !== undefined && file.note !== undefined
+        ? `Hentasis · ${file.note}`
+        : 'Hentasis'
+
+    return { title: mainTitle.value, cover: cover.value, voiceLabel: label }
+  }
+
   const label =
     parts === null ? '' : (voices.value.find((v) => v.key === parts.voiceKey)?.label ?? '')
 
@@ -523,6 +535,8 @@ function watchLink(): void {
  * жалоба подняла бы заслонку и убила место в серии. Отказ сети идёт человеку сразу. */
 async function onStreamDead(text: string, kind: DeadKind): Promise<void> {
   if (hentasis.state.open) {
+    hentasis.state.trouble =
+      'Файл не проигрался (заблокирован или недоступен) — попробуй другой файл.'
     Logger('WARN', 'Плеер: файл Hentasis не играет, возвращаю обычный поток')
     hentasis.close()
     return
@@ -542,6 +556,8 @@ function pauseMainVideo(): void {
 
 /** Файл Hentasis играет в общем теге: ключ места — spotKey с меткой 'hx',
  * поэтому «продолжить с…» и история работают без отдельных механизмов. */
+/** Файл Hentasis играет в общем теге: ключ места — spotKey с меткой 'hx',
+ * поэтому «продолжить с…» и история работают без отдельных механизмов. */
 function startHentasis(): void {
   const file = hentasis.state.files[hentasis.state.picked]
   const el = videoEl.value
@@ -551,7 +567,10 @@ function startHentasis(): void {
   if (spot !== '') {
     rememberSpot(spot, Math.floor(el.currentTime), total.value, aboutSpot(spot))
   }
-  const key = spotKey(mediaId.value, 'hx', hentasis.state.picked)
+
+  // Номер файла — с единицы, как нумерует сайт: нулевой «эпизод» хранилище
+  // считает пустым выбором и в историю такие записи не показывает.
+  const key = spotKey(mediaId.value, 'hx', hentasis.state.picked + 1)
   const from = Math.max(0, peekSpot(key))
   spot = key
   at.value = Math.floor(from)
@@ -1237,7 +1256,7 @@ onBeforeUnmount(() => {
                и второй щелчок менял размер окна вместо ожидаемого. -->
           <div class="am-play__stage">
             <video ref="videoEl" class="am-play__frame" playsinline preload="metadata"></video>
-
+            <HentasisStage />
             <button
               v-if="!veil"
               class="am-play__tap"
@@ -1533,7 +1552,6 @@ onBeforeUnmount(() => {
         <HentasisOthers v-if="!wide" />
       </div>
     </Teleport>
-    <HentasisStage />
   </section>
 </template>
 
