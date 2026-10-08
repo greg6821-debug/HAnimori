@@ -178,6 +178,15 @@ const mediaId = computed<number>(() => {
   return Number.isFinite(raw) && raw > 0 ? raw : 0
 })
 
+/** Кадр Hentasis открыт: kodik-накладки (пропуски, переключение серий) прячем. */
+const hxOn = computed<boolean>(() => hentasis.state.open)
+
+/** Открыт именно iframe-файл: свой слой поверх, клавиатура — его. */
+const hxFrameOn = computed<boolean>(() => {
+  const file = hentasis.state.files[hentasis.state.picked]
+  return hentasis.state.open && file !== undefined && file.kind === 'iframe'
+})
+  
 const {
   busy,
   trouble,
@@ -257,8 +266,11 @@ const coverStyle = computed<{ backgroundImage: string }>(() => ({
 }))
 
 /** Заслонка нужна, пока кадра нет: чёрный прямоугольник ничего не говорит. */
-const veil = computed<boolean>(() => busy.value || trouble.value !== '' || stream.value === null)
-
+const veil = computed<boolean>(() =>
+  hentasis.state.open
+    ? false
+    : (busy.value || trouble.value !== '' || stream.value === null),
+)
 /** Что написано на заслонке: случаев без ссылки три, и путать их нельзя — при смене озвучки
  * серия выбрана и ждёт ссылки, а «Серия не выбрана» читалось как сброс выбора. */
 const veilWord = computed<string>(() => {
@@ -512,6 +524,12 @@ function watchLink(): void {
 /** Поток встал. Мёртвый адрес — норма добычи: берём новый и продолжаем с той же секунды,
  * жалоба подняла бы заслонку и убила место в серии. Отказ сети идёт человеку сразу. */
 async function onStreamDead(text: string, kind: DeadKind): Promise<void> {
+  if (hentasis.state.open) {
+    Logger('WARN', 'Плеер: файл Hentasis не играет, возвращаю обычный поток')
+    hentasis.close()
+    return
+  }
+
   if (kind === 'link' && renewMisses < RENEW_TRIES) {
     if (await renewLink('поток оборвался')) return
   }
@@ -524,6 +542,57 @@ function pauseMainVideo(): void {
   videoEl.value?.pause()
 }
 
+/** Файл Hentasis играет в общем теге: ключ места — spotKey с меткой 'hx',
+ * поэтому «продолжить с…» и история работают без отдельных механизмов. */
+function startHentasis(): void {
+  const file = hentasis.state.files[hentasis.state.picked]
+  const el = videoEl.value
+  if (file === undefined || file.kind === 'iframe' || el === null) return
+
+  // место прежнего воспроизведения записываем: после смены источника события тега его уже не спасут
+  if (spot !== '') {
+    rememberSpot(spot, Math.floor(el.currentTime), total.value, aboutSpot(spot))
+  }
+  const key = spotKey(mediaId.value, 'hx', hentasis.state.picked)
+  const from = Math.max(0, peekSpot(key))
+  spot = key
+  at.value = Math.floor(from)
+  total.value = 0
+  ready.value = 0
+  hoverShare.value = -1
+
+  if (file.kind === 'hls') {
+    if (playback === null) return
+    playback.open(file.url, from, true)
+    applyRate()
+    showResume(from)
+    return
+  }
+
+  // mp4 кладём в тег напрямую: player-hls умеет манифесты, прямой файл — дело тега.
+  playback?.close()
+  el.src = file.url
+  applyRate()
+
+  if (from > 0) {
+    const back = (): void => {
+      el.removeEventListener('loadedmetadata', back)
+      el.currentTime = from
+    }
+    el.addEventListener('loadedmetadata', back)
+  }
+
+  void el.play().catch(() => {})
+  showResume(from)
+}
+
+/** Возврат к обычному потоку после Hentasis: kodik-серия продолжает со своего места. */
+function resumeKodik(): void {
+  if (veil.value) return
+  const url = stream.value?.preferred.url ?? ''
+  if (url !== '') start(url)
+}
+  
 /** «Сначала»: человек не согласен с меткой. Забываем её, чтобы не спорить. */
 function doRestart(): void {
   if (veil.value) return
@@ -584,8 +653,10 @@ function onMeta(): void {
 
 /** Конец серии: следующая сама. Смотренное забывается: оно пройдено. */
 function onEnded(): void {
-  if (hentasis.state.open) return
-  // Метка уходит, а в истории серия встаёт целой: досмотренное не должно стоять там оборванным на предпоследней секунде.
+  if (hentasis.state.open) {
+    if (spot !== '') finishSpot(spot, total.value, aboutSpot(spot))
+    return
+  }
   if (spot !== '') finishSpot(spot, total.value, aboutSpot(spot))
   if (hasNext.value) nextEpisode()
 }
@@ -612,7 +683,6 @@ function onRolling(): void {
 }
 
 function doToggle(): void {
-  if (hentasis.state.open) return
   const el = videoEl.value
   if (el === null || veil.value) return
 
@@ -901,7 +971,8 @@ const rightKeys = computed<Key[]>(() => {
 function act(intent: PlayerIntent): void {
   // Под заслонкой играть нечего: пускаем выход, размер кадра и трансляцию — системной панели кадр не нужен, она зеркалит весь экран.
   if (veil.value && intent !== 'exit' && intent !== 'fullscreen' && intent !== 'cast') return
-
+  // Серии kodik не переключаются из-под кадра Hentasis.
+  if (hentasis.state.open && (intent === 'prevEpisode' || intent === 'nextEpisode')) return
   switch (intent) {
     case 'toggle':
       doToggle()
@@ -962,7 +1033,8 @@ function act(intent: PlayerIntent): void {
 
 /** Клавиатура и пульт: слушаем окно, потому что фокус бывает нигде. */
 function onKey(event: KeyboardEvent): void {
-  if (hentasis.state.open) {
+  // Свой слой iframe забирает клавиатуру целиком; у видео-файла клавиши общие с плеером.
+  if (hxFrameOn.value) {
     if (event.key === 'Escape') {
       event.preventDefault()
       hentasis.close()
@@ -1024,7 +1096,13 @@ onMounted(() => {
     applySound()
     applyRate()
   }
-
+  // Вернулись на экран с уже выбранным файлом Hentasis: тег после размонтирования пуст —
+  // ставим источник заново, место подскажет история.
+  if (hentasis.state.open) {
+    const hxFile = hentasis.state.files[hentasis.state.picked]
+    if (hxFile !== undefined && hxFile.kind !== 'iframe') startHentasis()
+    else pauseMainVideo()
+  }
   window.addEventListener('keydown', onKey)
   window.addEventListener('pointerdown', onDown)
 
@@ -1059,10 +1137,8 @@ watch(veil, (on) => {
 watch(
   () => stream.value?.preferred.url ?? '',
   (url) => {
-    if (url !== '') {
-      hentasis.close()
-      start(url)
-    }
+    if (url === '' || hentasis.state.open) return
+    start(url)
   },
 )
 
@@ -1071,11 +1147,19 @@ watch(wide, (on) => {
   document.body.style.overflow = on ? 'hidden' : ''
 })
 
-// Кадр Hentasis открыт — основной плеер молчит: иначе звук идёт из-под слоя.
+
+// Hentasis: видео-файл встаёт в общий тег, iframe — слоем поверх (главный на паузе);
+// закрытие возвращает kodik-поток к его месту.
 watch(
-  () => hentasis.state.open,
-  (open) => {
-    if (open) pauseMainVideo()
+  () => [hentasis.state.open, hentasis.state.picked] as const,
+  ([open], [wasOpen]) => {
+    if (open) {
+      const file = hentasis.state.files[hentasis.state.picked]
+      if (file !== undefined && file.kind !== 'iframe') startHentasis()
+      else pauseMainVideo()
+      return
+    }
+    if (wasOpen) resumeKodik()
   },
 )
 
@@ -1190,7 +1274,7 @@ onBeforeUnmount(() => {
               <button class="am-play__resume-key" type="button" @click="doRestart">Сначала</button>
             </div>
 
-            <button v-if="skip && !veil" class="am-play__skip" type="button" @click="doSkip">
+            <button v-if="skip && !veil && !hxOn" class="am-play__skip" type="button" @click="doSkip">
               {{ skip.label }}
             </button>
 
