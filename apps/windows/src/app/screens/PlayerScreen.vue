@@ -14,6 +14,8 @@ import {
 
 import { Logger } from '@/utils/logger'
 import HentasisBox from './HentasisBox.vue'
+import HentasisStage from './HentasisStage.vue'
+import { hentasis } from './hentasis-store'
 import EmptyMark from '../components/EmptyMark.vue'
 import { currentRoute } from '../router'
 
@@ -493,6 +495,7 @@ async function renewLink(why: string): Promise<boolean> {
 /** Присмотр за сроком: меняем адрес заранее, пока старый играет. Сказать человеку есть о чём
  * только когда ссылка мертва и новую не дают который раз подряд. */
 function watchLink(): void {
+  if (hentasis.state.open) return
   if (veil.value || renewOn.value) return
 
   const left = linkLeft()
@@ -581,6 +584,7 @@ function onMeta(): void {
 
 /** Конец серии: следующая сама. Смотренное забывается: оно пройдено. */
 function onEnded(): void {
+  if (hentasis.state.open) return
   // Метка уходит, а в истории серия встаёт целой: досмотренное не должно стоять там оборванным на предпоследней секунде.
   if (spot !== '') finishSpot(spot, total.value, aboutSpot(spot))
   if (hasNext.value) nextEpisode()
@@ -608,6 +612,7 @@ function onRolling(): void {
 }
 
 function doToggle(): void {
+  if (hentasis.state.open) return
   const el = videoEl.value
   if (el === null || veil.value) return
 
@@ -1046,7 +1051,10 @@ watch(veil, (on) => {
 watch(
   () => stream.value?.preferred.url ?? '',
   (url) => {
-    if (url !== '') start(url)
+    if (url !== '') {
+      hentasis.close()
+      start(url)
+    }
   },
 )
 
@@ -1131,6 +1139,7 @@ onBeforeUnmount(() => {
           <!-- Двойного щелчка по кадру нет нарочно: по кадру щёлкают ради паузы,
                и второй щелчок менял размер окна вместо ожидаемого. -->
           <div class="am-play__stage">
+            <HentasisStage v-if="hentasis.state.open" />
             <video ref="videoEl" class="am-play__frame" playsinline preload="metadata"></video>
 
             <button
@@ -1416,7 +1425,7 @@ onBeforeUnmount(() => {
 
           <div class="am-play__box">
             <h3 class="am-play__h">Hentasis · 18+</h3>
-            <HentasisBox :anime-id="mediaId" @started="pauseMainVideo" />
+            <HentasisBox :anime-id="mediaId" />
           </div>
         </aside>
       </div>
