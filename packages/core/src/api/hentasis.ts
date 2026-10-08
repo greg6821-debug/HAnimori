@@ -8,11 +8,11 @@
 export type HentasisFileKind = 'mp4' | 'hls' | 'iframe'
 
 export interface HentasisFile {
-  label: string;
-  url: string;
-  kind: HentasisFileKind;
+  label: string
+  url: string
+  kind: HentasisFileKind
   /** Пометка из «Примечания»: «озвучка · AniStar», «субтитры · Crunchyroll», «хента-трек». */
-  note?: string;
+  note?: string
 }
 
 export interface HentasisInfo {
@@ -43,14 +43,14 @@ export interface PageRequestInit {
 export type PageFetcher = (url: string, init?: PageRequestInit) => Promise<string>
 
 export interface HentasisFindOptions {
-  minScore?: number;
-  strongScore?: number;
+  minScore?: number
+  strongScore?: number
   /** Бюджет страниц поиска за весь прогон: настоящий потолок сетевой нагрузки. */
-  maxPages?: number;
+  maxPages?: number
   /** Пауза между обращениями к сайту, мс (+до 300 мс разброса). 0 — без пауз (тесты). */
-  delayMs?: number;
+  delayMs?: number
   /** Год выпуска с AniList: кандидаты с совпавшим годом получают буст при ранжировании. */
-  year?: number;
+  year?: number
 }
 
 const DEFAULT_FIND: Omit<Required<HentasisFindOptions>, 'year'> = {
@@ -198,43 +198,42 @@ function extractFiles(html: string, pageUrl: string): RawFile[] {
   return out
 }
 
-
 /* ---------- Примечание: расшифровка «Файлы 1,2 — озвучка от AniStar, файл 3,4 — субтитры…» ---------- */
 
 const NOTE_STOP_RE =
-  /(Скачать|Плеер|Смотреть онлайн|Трейлер|Коммент|Реклама|Похожее|Внимание|Телеграм)/i;
+  /(Скачать|Плеер|Смотреть онлайн|Трейлер|Коммент|Реклама|Похожее|Внимание|Телеграм)/i
 
 /** Текст примечания из HTML: от слова «Примечание» до стоп-слова следующего блока страницы. */
 function extractNoteText(html: string): string {
   const plain = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]*>/g, ' ');
-  const at = plain.indexOf('Примечание');
-  if (at < 0) return '';
+    .replace(/<[^>]*>/g, ' ')
+  const at = plain.indexOf('Примечание')
+  if (at < 0) return ''
 
-  let text = plain.slice(at).replace(/\s+/g, ' ');
-  const stop = text.search(NOTE_STOP_RE);
-  if (stop > 0) text = text.slice(0, stop);
-  return text.slice(0, 1200);
+  let text = plain.slice(at).replace(/\s+/g, ' ')
+  const stop = text.search(NOTE_STOP_RE)
+  if (stop > 0) text = text.slice(0, stop)
+  return text.slice(0, 1200)
 }
 
 /** «1,2» → [1,2]; «1-4» → [1,2,3,4]; «9,10» → [9,10]. Диапазон длиннее 50 — мусор, обрываем. */
 function expandFileNumbers(raw: string): number[] {
-  const out: number[] = [];
+  const out: number[] = []
   for (const part of raw.split(',')) {
-    const bounds = part.split(/\s*[-–—]\s*/).map((n) => Number.parseInt(n, 10));
-    const first = bounds[0];
-    if (first === undefined || !Number.isFinite(first)) continue;
-    const second = bounds.length > 1 ? bounds[1] : first;
-    const from = Math.max(1, first);
+    const bounds = part.split(/\s*[-–—]\s*/).map((n) => Number.parseInt(n, 10))
+    const first = bounds[0]
+    if (first === undefined || !Number.isFinite(first)) continue
+    const second = bounds.length > 1 ? bounds[1] : first
+    const from = Math.max(1, first)
     const to = Math.min(
       from + 49,
       Math.max(from, second !== undefined && Number.isFinite(second) ? second : from),
-    );
-    for (let n = from; n <= to; n += 1) out.push(n);
+    )
+    for (let n = from; n <= to; n += 1) out.push(n)
   }
-  return out;
+  return out
 }
 
 /** Из текста куска — вид дорожки и команда: «озвучка от AniStar» → озвучка/AniStar. */
@@ -243,53 +242,52 @@ function classifyNote(body: string): { kind: string; team: string } {
     .replace(/\([^)]*\)/g, ' ') // «(эп.1-12)», «(эпизоды склеены по 3)»
     .replace(/!+/g, '')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
 
-  let kind = '';
-  if (/хента-?трек/i.test(text)) kind = 'хента-трек';
-  else if (/озвучк/i.test(text)) kind = 'озвучка';
-  else if (/субтитр/i.test(text)) kind = 'субтитры';
+  let kind = ''
+  if (/хента-?трек/i.test(text)) kind = 'хента-трек'
+  else if (/озвучк/i.test(text)) kind = 'озвучка'
+  else if (/субтитр/i.test(text)) kind = 'субтитры'
 
-  let team = '';
-  const tail = /от\s+(.+)$/i.exec(text);
-  if (tail !== null) team = (tail[1] ?? '').replace(/[.,;:\s]+$/g, '').trim();
+  let team = ''
+  const tail = /от\s+(.+)$/i.exec(text)
+  if (tail !== null) team = (tail[1] ?? '').replace(/[.,;:\s]+$/g, '').trim()
 
-  return { kind, team };
+  return { kind, team }
 }
 
 /** Текст примечания → карта «номер файла → пометка». Не разобралось — карта пустая. */
 export function parseHentasisNote(text: string): Map<number, string> {
-  const map = new Map<number, string>();
-  if (text === '') return map;
+  const map = new Map<number, string>()
+  if (text === '') return map
 
-  const headerRe = /[Фф]айл(?:ы|а)?\s+(\d+(?:\s*[-–—,]\s*\d+)*)\s*[-–—:]\s*/g;
-  const marks: { files: number[]; headerStart: number; bodyStart: number }[] = [];
+  const headerRe = /[Фф]айл(?:ы|а)?\s+(\d+(?:\s*[-–—,]\s*\d+)*)\s*[-–—:]\s*/g
+  const marks: { files: number[]; headerStart: number; bodyStart: number }[] = []
 
-  let m: RegExpExecArray | null;
+  let m: RegExpExecArray | null
   while ((m = headerRe.exec(text)) !== null) {
     marks.push({
       files: expandFileNumbers(m[1] ?? ''),
       headerStart: m.index,
       bodyStart: m.index + m[0].length,
-    });
+    })
   }
 
   for (let i = 0; i < marks.length; i += 1) {
-    const mark = marks[i];
-    if (mark === undefined) continue;
-    const nextMark = marks[i + 1];
-    const bodyEnd = nextMark !== undefined ? nextMark.headerStart : text.length;
-    const { kind, team } = classifyNote(text.slice(mark.bodyStart, bodyEnd));
-    const label = [kind, team].filter((p) => p !== '').join(' · ');
-    if (label === '') continue;
+    const mark = marks[i]
+    if (mark === undefined) continue
+    const nextMark = marks[i + 1]
+    const bodyEnd = nextMark !== undefined ? nextMark.headerStart : text.length
+    const { kind, team } = classifyNote(text.slice(mark.bodyStart, bodyEnd))
+    const label = [kind, team].filter((p) => p !== '').join(' · ')
+    if (label === '') continue
     for (const n of mark.files) {
-      if (!map.has(n)) map.set(n, label);
+      if (!map.has(n)) map.set(n, label)
     }
   }
 
-  return map;
+  return map
 }
-
 
 export async function getHentasisInfo(
   pageUrl: string,
@@ -318,19 +316,19 @@ export async function getHentasisInfo(
 
   // Нумерация примечания = порядок файлов плейлиста на сайте («Файл N»),
   // который extractFiles сохраняет как есть.
-  const noteMap = parseHentasisNote(extractNoteText(html));
+  const noteMap = parseHentasisNote(extractNoteText(html))
 
   const files: HentasisFile[] = raw.map((file, index) => {
-    const number = index + 1;
+    const number = index + 1
     const built: HentasisFile = {
       label: file.label !== undefined && file.label !== '' ? file.label : `Файл ${number}`,
       url: file.url,
       kind: classify(file.url),
-    };
-    const note = noteMap.get(number);
-    if (note !== undefined) built.note = note;
-    return built;
-  });
+    }
+    const note = noteMap.get(number)
+    if (note !== undefined) built.note = note
+    return built
+  })
 
   return {
     title: rawTitle === undefined ? undefined : clean(rawTitle),
@@ -355,92 +353,92 @@ function tokensOf(normalized: string): string[] {
 }
 
 export function scoreTitleMatch(query: string, title: string): number {
-  const q = normalizeTitle(query);
-  const t = normalizeTitle(title);
-  if (q === '' || t === '') return 0;
-  if (q === t) return 100;
-  if (t.includes(q)) return 95;
-  if (q.includes(t) && t.length >= 4) return 85;
+  const q = normalizeTitle(query)
+  const t = normalizeTitle(title)
+  if (q === '' || t === '') return 0
+  if (q === t) return 100
+  if (t.includes(q)) return 95
+  if (q.includes(t) && t.length >= 4) return 85
 
-  const qw = tokensOf(q);
-  const tw = tokensOf(t);
-  if (qw.length === 0 || tw.length === 0) return 0;
+  const qw = tokensOf(q)
+  const tw = tokensOf(t)
+  if (qw.length === 0 || tw.length === 0) return 0
 
   // Склейки соседних слов: ромадзи на двух сайтах различается пробелами
   // («Tsurete kita» на сайте и «Tsuretekita» у нас — одно и то же слово).
-  const tTokens = new Set(tw);
-  const tGlued = new Set<string>();
+  const tTokens = new Set(tw)
+  const tGlued = new Set<string>()
   for (let i = 0; i < tw.length - 1; i += 1) {
-    const glued = `${tw[i]}${tw[i + 1]}`;
-    if (glued.length > 2) tGlued.add(glued);
+    const glued = `${tw[i]}${tw[i + 1]}`
+    if (glued.length > 2) tGlued.add(glued)
   }
 
-  let covered = 0;
+  let covered = 0
   for (let i = 0; i < qw.length; i += 1) {
-    const word = qw[i];
-    if (word === undefined) continue;
+    const word = qw[i]
+    if (word === undefined) continue
 
     if (tTokens.has(word) || tGlued.has(word)) {
-      covered += 1;
-      continue;
+      covered += 1
+      continue
     }
 
-    const next = qw[i + 1];
+    const next = qw[i + 1]
     if (next !== undefined && tTokens.has(word + next)) {
-      covered += 2;
-      i += 1;
+      covered += 2
+      i += 1
     }
   }
 
-  if (covered === 0) return 0;
+  if (covered === 0) return 0
 
   // Все слова запроса нашлись (пусть и через склейки) — почти наверняка тот же тайтл:
   // останавливаем поиск, как при фразовом совпадении.
-  if (covered >= qw.length && qw.length >= 3) return 85;
+  if (covered >= qw.length && qw.length >= 3) return 85
 
-  return Math.min(84, Math.round((covered / qw.length) * 100));
+  return Math.min(84, Math.round((covered / qw.length) * 100))
 }
 
 export function buildSearchQueries(titles: string[], limit = 24): string[] {
-  const seen = new Set<string>();
-  const full: string[] = [];
-  const partial: string[] = [];
+  const seen = new Set<string>()
+  const full: string[] = []
+  const partial: string[] = []
 
   const add = (pool: string[], raw: string): void => {
     const q = raw
       .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
       .replace(/\s+/g, ' ')
-      .trim();
-    if (q.length < 3) return;
-    const key = normalizeTitle(q);
-    if (key === '' || seen.has(key)) return;
-    seen.add(key);
-    pool.push(q);
-  };
+      .trim()
+    if (q.length < 3) return
+    const key = normalizeTitle(q)
+    if (key === '' || seen.has(key)) return
+    seen.add(key)
+    pool.push(q)
+  }
 
   // 1) каждое название целиком — английское, ромадзи, японское и русское.
-  for (const title of titles) add(full, title);
+  for (const title of titles) add(full, title)
 
   // 2) совпадающие части: названия длиннее нескольких слов DLE в режиме «все слова»
   //    не находит — достаточно одного несовпавшего слова, и выдача пустая.
   for (const title of titles) {
-    const words = normalizeTitle(title).split(' ').filter(Boolean);
-    if (words.length > 3) add(partial, words.slice(0, 3).join(' '));
-    if (words.length > 2) add(partial, words.slice(0, 2).join(' '));
+    const words = normalizeTitle(title).split(' ').filter(Boolean)
+    if (words.length > 3) add(partial, words.slice(0, 3).join(' '))
+    if (words.length > 2) add(partial, words.slice(0, 2).join(' '))
 
-    const longest = words.filter((w) => w.length >= 5).sort((a, b) => b.length - a.length)[0];
+    const longest = words.filter((w) => w.length >= 5).sort((a, b) => b.length - a.length)[0]
     if (longest !== undefined && words.length > 1) {
-      add(partial, longest);
+      add(partial, longest)
 
       // Префиксы самого длинного слова: слитное ромадзи на сайте бывает раздельным
       // («Otomedori» → «otome dori»), а поиск DLE идёт по словам — префикс «otome»
       // находит и слитное, и раздельное написание.
-      if (longest.length > 5) add(partial, longest.slice(0, 5));
-      if (longest.length > 4) add(partial, longest.slice(0, 4));
+      if (longest.length > 5) add(partial, longest.slice(0, 5))
+      if (longest.length > 4) add(partial, longest.slice(0, 4))
     }
   }
 
-  return [...full, ...partial].slice(0, limit);
+  return [...full, ...partial].slice(0, limit)
 }
 
 function titleFromUrl(url: string): string {
@@ -497,8 +495,8 @@ const searchPathCache = new Map<string, string>()
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
+    setTimeout(resolve, ms)
+  })
 }
 
 interface SearchVariant {
@@ -530,28 +528,28 @@ export async function searchHentasis(
   fetchPage: PageFetcher,
   delayMs = 0,
 ): Promise<{ hits: HentasisHit[]; fetched: number }> {
-  let fetched = 0;
+  let fetched = 0
 
   for (const variant of searchVariants(base, query)) {
-    if (fetched >= 3) break; // на один запрос — не больше трёх страниц поиска
+    if (fetched >= 3) break // на один запрос — не больше трёх страниц поиска
 
     if (fetched > 0 && delayMs > 0) {
-      await wait(delayMs + Math.round(Math.random() * 300));
+      await wait(delayMs + Math.round(Math.random() * 300))
     }
 
-    fetched += 1;
+    fetched += 1
     try {
-      const html = await fetchPage(variant.url, variant.init);
-      const hits = extractHits(html, base, titles);
+      const html = await fetchPage(variant.url, variant.init)
+      const hits = extractHits(html, base, titles)
       if (hits.length > 0) {
-        searchPathCache.set(base.replace(/\/+$/, ''), variant.kind);
-        return { hits, fetched };
+        searchPathCache.set(base.replace(/\/+$/, ''), variant.kind)
+        return { hits, fetched }
       }
     } catch {
       // вариант не ответил — пробуем следующий
     }
   }
-  return { hits: [], fetched };
+  return { hits: [], fetched }
 }
 
 function sortPool(pool: Map<string, HentasisHit>): HentasisHit[] {
@@ -565,55 +563,55 @@ export async function autoFindHentasis(
   fetchPage: PageFetcher,
   options: HentasisFindOptions = {},
 ): Promise<HentasisFindResult> {
-  const opts = { ...DEFAULT_FIND, ...options };
-  const pool = new Map<string, HentasisHit>();
-  let pages = 0;
+  const opts = { ...DEFAULT_FIND, ...options }
+  const pool = new Map<string, HentasisHit>()
+  let pages = 0
 
   for (const query of queries) {
     for (const base of bases) {
-      if (pages >= opts.maxPages) break;
+      if (pages >= opts.maxPages) break
 
       // Пауза перед каждым обращением, кроме самого первого за прогон.
       if (pages > 0 && opts.delayMs > 0) {
-        await wait(opts.delayMs + Math.round(Math.random() * 300));
+        await wait(opts.delayMs + Math.round(Math.random() * 300))
       }
 
       try {
-        const { hits, fetched } = await searchHentasis(base, query, titles, fetchPage, opts.delayMs);
-        pages += fetched;
+        const { hits, fetched } = await searchHentasis(base, query, titles, fetchPage, opts.delayMs)
+        pages += fetched
 
         for (const hit of hits) {
-          let score = hit.score;
+          let score = hit.score
 
           if (opts.year !== undefined) {
             const withYear = normalizeTitle(hit.title)
               .split(' ')
-              .some((token) => token.startsWith(String(opts.year)));
-            if (withYear) score = Math.min(99, score + 5);
+              .some((token) => token.startsWith(String(opts.year)))
+            if (withYear) score = Math.min(99, score + 5)
           }
 
-          const known = pool.get(hit.url);
+          const known = pool.get(hit.url)
           if (known === undefined || score > known.score) {
-            pool.set(hit.url, { ...hit, score });
+            pool.set(hit.url, { ...hit, score })
           }
         }
       } catch {
         // поиск не ответил — идём дальше
       }
 
-      const best = sortPool(pool)[0];
+      const best = sortPool(pool)[0]
       if (best !== undefined && best.score >= opts.strongScore) {
-        return { best, candidates: sortPool(pool), pages };
+        return { best, candidates: sortPool(pool), pages }
       }
     }
-    if (pages >= opts.maxPages) break;
+    if (pages >= opts.maxPages) break
   }
 
-  const sorted = sortPool(pool);
-  const best = sorted[0];
+  const sorted = sortPool(pool)
+  const best = sorted[0]
   return {
     best: best !== undefined && best.score >= opts.minScore ? best : null,
     candidates: sorted,
     pages,
-  };
+  }
 }

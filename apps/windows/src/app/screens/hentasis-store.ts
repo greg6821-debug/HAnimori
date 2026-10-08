@@ -194,9 +194,15 @@ async function runSearch(auto = false): Promise<void> {
       return
     }
 
-    const found = await autoFindHentasis(readBases(), buildSearchQueries(titles), titles, fetchPage, {
-      year: year > 0 ? year : undefined,
-    })
+    const found = await autoFindHentasis(
+      readBases(),
+      buildSearchQueries(titles),
+      titles,
+      fetchPage,
+      {
+        year: year > 0 ? year : undefined,
+      },
+    )
     state.others = found.candidates.map(({ url, title }) => ({ url, title }))
 
     if (found.best === null) {

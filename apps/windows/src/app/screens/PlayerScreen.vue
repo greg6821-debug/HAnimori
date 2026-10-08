@@ -186,7 +186,7 @@ const hxFrameOn = computed<boolean>(() => {
   const file = hentasis.state.files[hentasis.state.picked]
   return hentasis.state.open && file !== undefined && file.kind === 'iframe'
 })
-  
+
 const {
   busy,
   trouble,
@@ -267,9 +267,7 @@ const coverStyle = computed<{ backgroundImage: string }>(() => ({
 
 /** Заслонка нужна, пока кадра нет: чёрный прямоугольник ничего не говорит. */
 const veil = computed<boolean>(() =>
-  hentasis.state.open
-    ? false
-    : (busy.value || trouble.value !== '' || stream.value === null),
+  hentasis.state.open ? false : busy.value || trouble.value !== '' || stream.value === null,
 )
 /** Что написано на заслонке: случаев без ссылки три, и путать их нельзя — при смене озвучки
  * серия выбрана и ждёт ссылки, а «Серия не выбрана» читалось как сброс выбора. */
@@ -592,7 +590,7 @@ function resumeKodik(): void {
   const url = stream.value?.preferred.url ?? ''
   if (url !== '') start(url)
 }
-  
+
 /** «Сначала»: человек не согласен с меткой. Забываем её, чтобы не спорить. */
 function doRestart(): void {
   if (veil.value) return
@@ -1147,7 +1145,6 @@ watch(wide, (on) => {
   document.body.style.overflow = on ? 'hidden' : ''
 })
 
-
 // Hentasis: видео-файл встаёт в общий тег, iframe — слоем поверх (главный на паузе);
 // закрытие возвращает kodik-поток к его месту.
 watch(
@@ -1274,7 +1271,12 @@ onBeforeUnmount(() => {
               <button class="am-play__resume-key" type="button" @click="doRestart">Сначала</button>
             </div>
 
-            <button v-if="skip && !veil && !hxOn" class="am-play__skip" type="button" @click="doSkip">
+            <button
+              v-if="skip && !veil && !hxOn"
+              class="am-play__skip"
+              type="button"
+              @click="doSkip"
+            >
               {{ skip.label }}
             </button>
 
