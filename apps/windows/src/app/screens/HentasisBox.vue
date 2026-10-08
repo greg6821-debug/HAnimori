@@ -106,17 +106,17 @@ watch(
       </button>
     </div>
 
-    <div v-if="state.others.length > 1" class="am-hx__others">
-      <span class="am-hx__cap">Другие совпадения</span>
+    <div v-if="state.files.length > 0" class="am-hx__files">
       <button
-        v-for="other in state.others"
-        :key="other.url"
-        class="am-hx__other"
+        v-for="(file, index) in state.files"
+        :key="file.url"
+        class="am-hx__file"
+        :class="{ 'am-hx__file--on': index === state.picked }"
         type="button"
-        :disabled="state.busy"
-        @click="hentasis.useCandidate(other.url)"
+        @click="hentasis.play(index)"
       >
-        {{ other.title }}
+        <span>{{ file.label }}</span>
+        <span v-if="file.note" class="am-hx__file-note">{{ file.note }}</span>
       </button>
     </div>
 
@@ -206,13 +206,15 @@ watch(
 }
 
 .am-hx__file {
-  border: 1px solid #2b2b3d;
-  border-radius: 8px;
-  padding: 5px 10px;
-  background: #16161f;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.am-hx__file-note {
+  font-size: 11px;
+  opacity: 0.7;
 }
 
 .am-hx__file:disabled {
