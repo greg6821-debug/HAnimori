@@ -1413,6 +1413,11 @@ onBeforeUnmount(() => {
 
             <p v-else class="am-play__none">Серий пока нет.</p>
           </div>
+
+          <div class="am-play__box">
+            <h3 class="am-play__h">Hentasis · 18+</h3>
+            <HentasisBox :anime-id="mediaId" @started="pauseMainVideo" />
+          </div>
         </aside>
       </div>
     </Teleport>
