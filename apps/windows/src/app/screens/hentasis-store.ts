@@ -1,5 +1,7 @@
 // Хранилище источника Hentasis (18+): домены, автопоиск по названиям, сохранённые ссылки.
 // Одно на всё приложение: бокс в списке и кадр на сцене читают его вместе.
+// Автопоиск при открытии тайтла заводится только когда на карточке стоит метка 18+:
+// сайт взрослый, остальным — кнопка «Искать по названию».
 import { reactive } from 'vue'
 
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
@@ -30,6 +32,8 @@ export interface HentasisState {
   busy: boolean
   phase: '' | 'search' | 'page'
   trouble: string
+  /** Нейтральное известие: не ошибка, но и не находка (например, поиск не заводился). */
+  notice: string
   matchedTitle: string
   matchedUrl: string
   matchedScore: number
@@ -47,6 +51,7 @@ const state = reactive<HentasisState>({
   busy: false,
   phase: '',
   trouble: '',
+  notice: '',
   matchedTitle: '',
   matchedUrl: '',
   matchedScore: 0,
@@ -111,19 +116,22 @@ async function fetchPage(page: string, init?: PageRequestInit): Promise<string> 
   return res.text()
 }
 
-/** Названия и год тайтла тем же путём, что и весь плеер: карточка AniList + русское имя. */
-async function fetchTitles(mediaId: number): Promise<{ titles: string[]; year: number }> {
+/** Названия, год и метка 18+ тем же путём, что и весь плеер: карточка AniList + русское имя. */
+async function fetchTitles(
+  mediaId: number,
+): Promise<{ titles: string[]; year: number; adult: boolean }> {
   const card = await fetchMediaCard(mediaId)
   await prefetchRussianNames([mediaId]).catch(() => {})
 
   const titles = [card?.english, card?.romaji, card?.native, peekRussianName(mediaId)].filter(
     (t): t is string => typeof t === 'string' && t.trim() !== '',
   )
-  return { titles, year: card?.seasonYear ?? 0 }
+  return { titles, year: card?.seasonYear ?? 0, adult: card?.isAdult === true }
 }
 
 function resetResult(): void {
   state.trouble = ''
+  state.notice = ''
   state.matchedTitle = ''
   state.matchedUrl = ''
   state.matchedScore = 0
@@ -162,7 +170,9 @@ async function loadPage(url: string, remember: boolean): Promise<void> {
   }
 }
 
-async function runSearch(): Promise<void> {
+/** Поиск по названиям. `auto` — запуск при открытии тайтла: без метки 18+ на карточке
+ * он молчит и оставляет известие; вручную (кнопка, ручная ссылка) ищем безусловно. */
+async function runSearch(auto = false): Promise<void> {
   if (state.animeId === 0 || state.busy) return
 
   state.busy = true
@@ -171,9 +181,16 @@ async function runSearch(): Promise<void> {
   resetResult()
 
   try {
-    const { titles, year } = await fetchTitles(state.animeId)
+    const { titles, year, adult } = await fetchTitles(state.animeId)
     if (titles.length === 0) {
       state.trouble = 'Не достал названия тайтла — поиск невозможен. Вставь ссылку на тайтл сам.'
+      return
+    }
+
+    if (auto && !adult) {
+      state.notice =
+        'Метка 18+ на карточке не стоит — автопоиск не запускался. ' +
+        'Считаешь нужным — «Искать по названию» или вставь ссылку.'
       return
     }
 
@@ -212,11 +229,12 @@ function bindAnime(id: number): void {
 
   const saved = readLinks()[String(id)]
   if (saved === undefined || saved.url === '') {
-    void runSearch()
+    void runSearch(true)
     return
   }
 
   // Ссылка найдена раньше: никакого поиска — один запрос на страницу.
+  // Это восстановление выбора, который человек уже сделал сам, метка 18+ тут не проверяется.
   state.manualUrl = saved.url
   void loadPage(saved.url, false).then(() => {
     if (state.trouble !== '') {
@@ -306,6 +324,7 @@ function forget(): void {
   delete map[String(state.animeId)]
   writeLinks(map)
   state.manualUrl = ''
+  // Нажатие «Забыть» — явное действие человека: ищем как ручной запуск.
   void runSearch()
 }
 
