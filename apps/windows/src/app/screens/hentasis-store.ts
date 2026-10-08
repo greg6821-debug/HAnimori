@@ -203,7 +203,9 @@ async function runSearch(auto = false): Promise<void> {
         year: year > 0 ? year : undefined,
       },
     )
-    state.others = found.candidates.map(({ url, title }) => ({ url, title }))
+    state.others = found.candidates
+      .filter((c) => c.score > 0)
+      .map(({ url, title }) => ({ url, title }))
 
     if (found.best === null) {
       state.trouble =
