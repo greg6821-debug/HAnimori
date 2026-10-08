@@ -43,7 +43,10 @@ export type PageFetcher = (url: string, init?: PageRequestInit) => Promise<strin
 export interface HentasisFindOptions {
   minScore?: number;
   strongScore?: number;
-  maxRequests?: number;
+  /** Бюджет страниц поиска за весь прогон: настоящий потолок сетевой нагрузки. */
+  maxPages?: number;
+  /** Пауза между обращениями к сайту, мс (+до 300 мс разброса). 0 — без пауз (тесты). */
+  delayMs?: number;
   /** Год выпуска с AniList: кандидаты с совпавшим годом получают буст при ранжировании. */
   year?: number;
 }
@@ -51,7 +54,8 @@ export interface HentasisFindOptions {
 const DEFAULT_FIND: Required<HentasisFindOptions> = {
   minScore: 65,
   strongScore: 85,
-  maxRequests: 24,
+  maxPages: 16,
+  delayMs: 700,
 }
 
 /** Адрес страницы тайтла на DLE: /1094-onaji-zemi-no-someya-san.html */
@@ -385,6 +389,12 @@ function extractHits(html: string, base: string, titles: string[]): HentasisHit[
 /** Удачный формат поиска запоминаем на домен: повторные запросы не перебирают варианты. */
 const searchPathCache = new Map<string, string>()
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 interface SearchVariant {
   kind: string
   url: string
@@ -412,24 +422,30 @@ export async function searchHentasis(
   query: string,
   titles: string[],
   fetchPage: PageFetcher,
+  delayMs = 0,
 ): Promise<{ hits: HentasisHit[]; fetched: number }> {
-  let fetched = 0
+  let fetched = 0;
 
   for (const variant of searchVariants(base, query)) {
-    if (fetched >= 3) break // на один запрос — не больше трёх страниц поиска
-    fetched += 1
+    if (fetched >= 3) break; // на один запрос — не больше трёх страниц поиска
+
+    if (fetched > 0 && delayMs > 0) {
+      await wait(delayMs + Math.round(Math.random() * 300));
+    }
+
+    fetched += 1;
     try {
-      const html = await fetchPage(variant.url, variant.init)
-      const hits = extractHits(html, base, titles)
+      const html = await fetchPage(variant.url, variant.init);
+      const hits = extractHits(html, base, titles);
       if (hits.length > 0) {
-        searchPathCache.set(base.replace(/\/+$/, ''), variant.kind)
-        return { hits, fetched }
+        searchPathCache.set(base.replace(/\/+$/, ''), variant.kind);
+        return { hits, fetched };
       }
     } catch {
       // вариант не ответил — пробуем следующий
     }
   }
-  return { hits: [], fetched }
+  return { hits: [], fetched };
 }
 
 function sortPool(pool: Map<string, HentasisHit>): HentasisHit[] {
@@ -443,24 +459,26 @@ export async function autoFindHentasis(
   fetchPage: PageFetcher,
   options: HentasisFindOptions = {},
 ): Promise<HentasisFindResult> {
-  const opts = { ...DEFAULT_FIND, ...options }
-  const pool = new Map<string, HentasisHit>()
-  let requests = 0
-  let pages = 0
+  const opts = { ...DEFAULT_FIND, ...options };
+  const pool = new Map<string, HentasisHit>();
+  let pages = 0;
 
   for (const query of queries) {
     for (const base of bases) {
-      if (requests >= opts.maxRequests) break
-      requests += 1
+      if (pages >= opts.maxPages) break;
+
+      // Пауза перед каждым обращением, кроме самого первого за прогон.
+      if (pages > 0 && opts.delayMs > 0) {
+        await wait(opts.delayMs + Math.round(Math.random() * 300));
+      }
 
       try {
-        const { hits, fetched } = await searchHentasis(base, query, titles, fetchPage);
+        const { hits, fetched } = await searchHentasis(base, query, titles, fetchPage, opts.delayMs);
         pages += fetched;
 
         for (const hit of hits) {
           let score = hit.score;
 
-          // Год с AniList: совпал с годом на странице — кандидат надёжнее (+5).
           if (opts.year !== undefined) {
             const withYear = normalizeTitle(hit.title)
               .split(' ')
@@ -474,22 +492,22 @@ export async function autoFindHentasis(
           }
         }
       } catch {
-        // поиск не ответил — считаем запрос израсходованным и идём дальше
+        // поиск не ответил — идём дальше
       }
 
-      const best = sortPool(pool)[0]
+      const best = sortPool(pool)[0];
       if (best !== undefined && best.score >= opts.strongScore) {
-        return { best, candidates: sortPool(pool), pages }
+        return { best, candidates: sortPool(pool), pages };
       }
     }
-    if (requests >= opts.maxRequests) break
+    if (pages >= opts.maxPages) break;
   }
 
-  const sorted = sortPool(pool)
-  const best = sorted[0]
+  const sorted = sortPool(pool);
+  const best = sorted[0];
   return {
     best: best !== undefined && best.score >= opts.minScore ? best : null,
     candidates: sorted,
     pages,
-  }
+  };
 }
