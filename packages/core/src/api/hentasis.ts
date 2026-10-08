@@ -53,7 +53,7 @@ export interface HentasisFindOptions {
   year?: number;
 }
 
-const DEFAULT_FIND: Required<HentasisFindOptions> = {
+const DEFAULT_FIND: Omit<Required<HentasisFindOptions>, 'year'> = {
   minScore: 65,
   strongScore: 85,
   maxPages: 16,
@@ -252,7 +252,7 @@ function classifyNote(body: string): { kind: string; team: string } {
 
   let team = '';
   const tail = /от\s+(.+)$/i.exec(text);
-  if (tail !== null) team = tail[1].replace(/[.,;:\s]+$/g, '').trim();
+  if (tail !== null) team = (tail[1] ?? '').replace(/[.,;:\s]+$/g, '').trim();
 
   return { kind, team };
 }
@@ -276,7 +276,9 @@ export function parseHentasisNote(text: string): Map<number, string> {
 
   for (let i = 0; i < marks.length; i += 1) {
     const mark = marks[i];
-    const bodyEnd = i + 1 < marks.length ? marks[i + 1].headerStart : text.length;
+    if (mark === undefined) continue;
+    const nextMark = marks[i + 1];
+    const bodyEnd = nextMark !== undefined ? nextMark.headerStart : text.length;
     const { kind, team } = classifyNote(text.slice(mark.bodyStart, bodyEnd));
     const label = [kind, team].filter((p) => p !== '').join(' · ');
     if (label === '') continue;
@@ -376,12 +378,13 @@ export function scoreTitleMatch(query: string, title: string): number {
   let covered = 0;
   for (let i = 0; i < qw.length; i += 1) {
     const word = qw[i];
+    if (word === undefined) continue;
+
     if (tTokens.has(word) || tGlued.has(word)) {
       covered += 1;
       continue;
     }
 
-    // Слово запроса не нашлось само — вдруг оно склейка двух соседних слов титула.
     const next = qw[i + 1];
     if (next !== undefined && tTokens.has(word + next)) {
       covered += 2;
