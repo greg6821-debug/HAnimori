@@ -636,12 +636,6 @@ interface SearchVariant {
   init?: PageRequestInit
 }
 
-interface SearchVariant {
-  kind: string
-  url: string
-  init?: PageRequestInit
-}
-
 /** Формы поиска с сайта: GET полного поиска (с search_start/full_search, как в его форме),
  * POST быстрого поиска (do/search/subaction/story на index.php и на корень — quicksearch
  * шлёт на текущий адрес), AJAX-подсказка из шапки. Порядок — до первого удачного. */
