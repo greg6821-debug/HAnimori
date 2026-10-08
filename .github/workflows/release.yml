@@ -215,8 +215,8 @@ jobs:
           # в apps/windows/artifacts. Без префикса шаг искал бы их в корне и
           # выпустил бы релиз без переименованного установщика и портабла.
           files: |
-            apps/windows/artifacts/HAniMori_Setup.exe
-            apps/windows/artifacts/HAniMori_*_x64-portable.zip
+            apps/windows/artifacts/*_Setup.exe
+            apps/windows/artifacts/*_x64-portable.zip
 
       # Канал обновлений Windows: отдельный релиз с постоянным именем, всегда указывающий на
       # последнюю сборку. Зачем он нужен: апдейтер читает адрес по имени, а `releases/latest`
