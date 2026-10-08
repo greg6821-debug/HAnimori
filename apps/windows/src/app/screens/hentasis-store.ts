@@ -115,13 +115,14 @@ async function fetchPage(page: string, init?: PageRequestInit): Promise<string> 
 }
 
 /** Все названия тайтла тем же путём, что и весь плеер: карточка AniList + русское имя. */
-async function fetchTitles(mediaId: number): Promise<string[]> {
+async function fetchTitles(mediaId: number): Promise<{ titles: string[]; year: number }> {
   const card = await fetchMediaCard(mediaId)
   await prefetchRussianNames([mediaId]).catch(() => {})
 
-  return [card?.english, card?.romaji, card?.native, peekRussianName(mediaId)].filter(
+  const titles = [card?.english, card?.romaji, card?.native, peekRussianName(mediaId)].filter(
     (t): t is string => typeof t === 'string' && t.trim() !== '',
   )
+  return { titles, year: card?.seasonYear ?? 0 }
 }
 
 function resetResult(): void {
@@ -172,14 +173,17 @@ async function runSearch(): Promise<void> {
   state.trouble = ''
   resetResult()
 
-  try {
-    const titles = await fetchTitles(state.animeId)
+
+  
+    const { titles, year } = await fetchTitles(state.animeId)
     if (titles.length === 0) {
       state.trouble = 'Не достал названия тайтла — поиск невозможен. Вставь ссылку на тайтл сам.'
       return
     }
 
-    const found = await autoFindHentasis(readBases(), buildSearchQueries(titles), titles, fetchPage)
+    const found = await autoFindHentasis(readBases(), buildSearchQueries(titles), titles, fetchPage, {
+      year: year > 0 ? year : undefined,
+    })
     state.others = found.candidates.slice(0, 8).map(({ url, title }) => ({ url, title }))
 
     if (found.best === null) {
