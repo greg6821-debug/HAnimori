@@ -1,8 +1,8 @@
 {
   "name": "hanimori",
   "private": true,
-  "version": "3.1.0",
-  "description": "AniMori: общее ядро и два приложения — настольное и приставка",
+  "version": "1.3.1",
+  "description": "HAniMori: общее ядро и два приложения — настольное и приставка",
   "workspaces": [
     "apps/windows",
     "apps/android-tv"
