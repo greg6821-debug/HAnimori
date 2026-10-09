@@ -1,14 +1,16 @@
 <script setup lang="ts">
 // Бокс источника Hentasis (18+) в списке сбоку: домены, автопоиск по названиям,
 // ручная ссылка и выбор файла. Кадр играет в общем теге основного плеера.
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import type { HentasisFile } from '@/api/hentasis'
 
 import { hentasis } from './hentasis-store'
 
 import { Bridge } from '@/bridge'
-
+/** Файлы в боксе спрятаны за переключателем: основной путь — списки плеера
+ * («Озвучка»/«Серии»), здесь они остаются запасным доступом. */
+const showFiles = ref(false)
 /** Наружу через оболочку — тем же путём, что ссылки описания на карточке:
  * в WebView2 новый таргет молча отбрасывается, а переход в том же окне унёс бы приложение. */
 async function openSite(): Promise<void> {
@@ -28,7 +30,10 @@ const state = hentasis.state
 
 watch(
   () => props.animeId,
-  (id) => hentasis.bindAnime(id),
+  (id) => {
+    showFiles.value = false
+    hentasis.bindAnime(id)
+  },
   { immediate: true },
 )
 
@@ -143,42 +148,43 @@ const groups = computed<FileGroup[]>(() => {
       </span>
     </label>
 
-    <!-- Без пометок — простая оборка кнопок, как раньше. -->
-    <div v-if="state.files.length > 0 && !hasNotes" class="am-hx__files">
-      <button
-        v-for="(file, index) in state.files"
-        :key="file.url"
-        class="am-hx__file"
-        :class="{ 'am-hx__file--on': index === state.picked }"
-        type="button"
-        @click="hentasis.play(index)"
-      >
-        {{ file.label }}
+    <!-- Файлы спрятаны: они дублируют список «Серии» плеера. Показываются по желанию. -->
+    <template v-if="state.files.length > 0">
+      <button class="am-hx__file" type="button" @click="showFiles = !showFiles">
+        {{ showFiles ? 'Спрятать файлы' : `Показать файлы · ${state.files.length}` }}
       </button>
-    </div>
 
-    <!-- С пометками — группы подряд идущих одинаковых пометок, каждая группа в своей строке. -->
-    <div v-else-if="state.files.length > 0" class="am-hx__groups">
-      <div v-for="(group, gi) in groups" :key="gi" class="am-hx__group">
-        <button
-          v-for="item in group.items"
-          :key="item.file.url"
-          class="am-hx__filecard"
-          :class="{ 'am-hx__filecard--on': item.index === state.picked }"
-          type="button"
-          @click="hentasis.play(item.index)"
-        >
-          <span>{{ item.file.label }}</span>
-          <span v-if="item.file.note" class="am-hx__file-note">{{ item.file.note }}</span>
-        </button>
-      </div>
-    </div>
+      <template v-if="showFiles">
+        <div v-if="!hasNotes" class="am-hx__files">
+          <button
+            v-for="(file, index) in state.files"
+            :key="file.url"
+            class="am-hx__file"
+            :class="{ 'am-hx__file--on': index === state.picked }"
+            type="button"
+            @click="hentasis.play(index)"
+          >
+            {{ file.label }}
+          </button>
+        </div>
 
-    <button v-if="state.matchedUrl !== ''" class="am-hx__link" type="button" @click="openSite()">
-      Открыть страницу на сайте ↗
-    </button>
-  </div>
-</template>
+        <div v-else class="am-hx__groups">
+          <div v-for="(group, gi) in groups" :key="gi" class="am-hx__group">
+            <button
+              v-for="item in group.items"
+              :key="item.file.url"
+              class="am-hx__filecard"
+              :class="{ 'am-hx__filecard--on': item.index === state.picked }"
+              type="button"
+              @click="hentasis.play(item.index)"
+            >
+              <span>{{ item.file.label }}</span>
+              <span v-if="item.file.note" class="am-hx__file-note">{{ item.file.note }}</span>
+            </button>
+          </div>
+        </div>
+      </template>
+    </template>
 
 <style scoped>
 .am-hx {
