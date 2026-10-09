@@ -283,7 +283,7 @@ let hxResume: { gi: number; ep: number } | null = null
 
 /** Сторожок hx-файла: метаданные не приехали за 25 секунд — файл не грузится. */
 let hxWatchdog = 0
-  
+
 /** Восстановление hx-выбора: играем, как только группы на месте; если они уже
  * загружены — срабатывает сразу, без ожидания. */
 function tryHxResume(): void {
@@ -1297,8 +1297,6 @@ watch(
 watch(wide, (on) => {
   document.body.style.overflow = on ? 'hidden' : ''
 })
-
-
 
 onBeforeUnmount(() => {
   const el = videoEl.value

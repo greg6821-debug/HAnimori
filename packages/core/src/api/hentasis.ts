@@ -569,10 +569,10 @@ async function looksLikeManifest(url: string, fetchPage: PageFetcher): Promise<b
 }
 
 export interface HentasisDirect {
-  url: string;
-  kind: HentasisFileKind;
+  url: string
+  kind: HentasisFileKind
   /** Цепочка страниц, по которой дошли до файла: для диагностики обрывов. */
-  hops: string[];
+  hops: string[]
 }
 
 /** Разыменование iframe-файла: цепочка страниц-плееров до прямой ссылки.
@@ -582,14 +582,14 @@ export async function resolveHentasisDirect(
   fetchPage: PageFetcher,
   maxHops = 3,
 ): Promise<HentasisDirect> {
-  const visited: string[] = [];
-  let url = iframeUrl;
+  const visited: string[] = []
+  let url = iframeUrl
 
   for (let hop = 0; hop < maxHops; hop += 1) {
     if (visited.includes(url)) {
-      throw new Error(`Цикл в цепочке плееров: ${visited.join(' → ')}`);
+      throw new Error(`Цикл в цепочке плееров: ${visited.join(' → ')}`)
     }
-    visited.push(url);
+    visited.push(url)
 
     let html: string
     try {
@@ -599,45 +599,45 @@ export async function resolveHentasisDirect(
       throw new Error(`Страница плеера не отдалась (${url}): ${why}`, { cause: e })
     }
 
-    let frame: string | undefined;
+    let frame: string | undefined
     for (const config of extractConfigs(html, url)) {
       for (const file of config.files) {
-        const kind = classify(file.url);
+        const kind = classify(file.url)
         if (kind === 'mp4' || kind === 'hls') {
-          return { url: file.url, kind, hops: [...visited] };
+          return { url: file.url, kind, hops: [...visited] }
         }
         if (kind === 'iframe' && file.url !== iframeUrl && frame === undefined) {
-          frame = file.url;
+          frame = file.url
         }
       }
     }
 
     for (const candidate of extractVideoTagSources(html, url)) {
-      const kind = classify(candidate);
+      const kind = classify(candidate)
       if (kind === 'mp4' || kind === 'hls') {
-        return { url: candidate, kind, hops: [...visited] };
+        return { url: candidate, kind, hops: [...visited] }
       }
     }
 
-    const found = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8)(?:\?[^\s"'`<>\\]*)?/i.exec(html);
+    const found = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8)(?:\?[^\s"'`<>\\]*)?/i.exec(html)
     if (found !== null) {
-      const direct = absolutize(found[0] ?? '', url);
-      if (direct !== '') return { url: direct, kind: classify(direct), hops: [...visited] };
+      const direct = absolutize(found[0] ?? '', url)
+      if (direct !== '') return { url: direct, kind: classify(direct), hops: [...visited] }
     }
 
     for (const candidate of manifestCandidates(html)) {
       if (await looksLikeManifest(candidate, fetchPage)) {
-        return { url: candidate, kind: 'hls', hops: [...visited] };
+        return { url: candidate, kind: 'hls', hops: [...visited] }
       }
     }
 
     if (frame === undefined) {
-      throw new Error(`Прямой ссылки нет ни на одной странице цепочки: ${visited.join(' → ')}`);
+      throw new Error(`Прямой ссылки нет ни на одной странице цепочки: ${visited.join(' → ')}`)
     }
-    url = frame;
+    url = frame
   }
 
-  throw new Error(`Цепочка длиннее ${maxHops} страниц: ${visited.join(' → ')}`);
+  throw new Error(`Цепочка длиннее ${maxHops} страниц: ${visited.join(' → ')}`)
 }
 
 /* ---------- Поиск тайтла по названиям ---------- */
