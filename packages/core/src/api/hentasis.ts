@@ -310,9 +310,6 @@ function extractConfigs(html: string, pageUrl: string): RawConfig[] {
   }
   if (configs.length > 0) return configs
 
-  // Фолбэк 2: прямые ссылки, затем iframe
-  const files: RawFile[] = []
-
   // Фолбэк 2: теги video/source, затем полные адреса файлов, затем iframe
   const files: RawFile[] = []
 
@@ -644,10 +641,12 @@ export async function resolveHentasisDirect(
     }
 
 
-    const found = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8)(?:\?[^\s"'`<>\\]*)?/i.exec(html)
-    if (found !== null) {
-      const direct = absolutize(found[0] ?? '', url)
-      if (direct !== '') return { url: direct, kind: classify(direct), hops: [...visited] }
+    // 3) Полные адреса файлов: расширение сверяется в конце пути, обрезок не бывает.
+    for (const candidate of extractMediaUrls(html)) {
+      const kind = classify(candidate)
+      if (kind === 'mp4' || kind === 'hls') {
+        return { url: candidate, kind, hops: [...visited] }
+      }
     }
 
     for (const candidate of manifestCandidates(html)) {
