@@ -283,7 +283,45 @@ let hxResume: { gi: number; ep: number } | null = null
 
 /** Сторожок hx-файла: метаданные не приехали за 25 секунд — файл не грузится. */
 let hxWatchdog = 0
+/** Дорожки субтитров, созданные для hx-файла: чистятся при смене/закрытии. */
+let hxSubTracks: TextTrack[] = []
 
+
+function clearHxSubtitles(): void {
+  for (const track of hxSubTracks) {
+    track.mode = 'disabled'
+    while (track.cues !== null && track.cues.length > 0) {
+      const cue = track.cues[0]
+      if (cue !== null) track.removeCue(cue)
+    }
+  }
+  hxSubTracks = []
+}
+
+async function attachHxSubtitles(): Promise<void> {
+  clearHxSubtitles()
+
+  const subs = hentasis.state.subtitles
+  const el = videoEl.value
+  if (el === null || subs.length === 0) return
+
+  const preferred = subs.find((s) => /рус|russ/i.test(s.label)) ?? subs[0]
+  if (preferred === undefined) return
+
+  try {
+    const cues = await hentasis.loadSubtitleCues(preferred.src)
+    const track = el.addTextTrack('subtitles', preferred.label, 'ru')
+    track.mode = 'showing'
+    for (const cue of cues) track.addCue(new VTTCue(cue.start, cue.end, cue.text))
+    hxSubTracks.push(track)
+    Logger('INFO', `Плеер: субтитры Hentasis показываются (${preferred.label}, ${cues.length})`)
+  } catch (e: unknown) {
+    Logger('WARN', 'Плеер: субтитры Hentasis не добрались', e)
+  }
+}
+
+
+  
 /** Восстановление hx-выбора: играем, как только группы на месте; если они уже
  * загружены — срабатывает сразу, без ожидания. */
 function tryHxResume(): void {
@@ -691,6 +729,7 @@ function startHentasis(): void {
 
   void el.play().catch(() => {})
   showResume(from)
+  void attachHxSubtitles()
 }
 
 /** Возврат к обычному потоку после Hentasis: kodik-серия продолжает со своего места. */
@@ -1253,6 +1292,7 @@ watch(
       return
     }
     if (wasOpen) {
+      clearHxSubtitles()
       hxVoice.value = -1
       if (hxWatchdog !== 0) {
         window.clearTimeout(hxWatchdog)
@@ -1327,7 +1367,7 @@ onBeforeUnmount(() => {
 
   // Отложенная запись уход с экрана не переживёт: просим записать сейчас.
   flushWatchKeep()
-
+  clearHxSubtitles()
   // Уходим с экрана — возвращаем окно: полный экран был нужен кадру, не спискам.
   void wantWindowWide(false)
 
