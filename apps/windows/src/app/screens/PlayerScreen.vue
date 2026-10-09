@@ -399,11 +399,16 @@ const coverStyle = computed<{ backgroundImage: string }>(() => ({
   backgroundImage: cover.value === null ? 'none' : `url("${cover.value}")`,
 }))
 
-/** Заслонка нужна, пока кадра нет: чёрный прямоугольник ничего не говорит. */
-const veil = computed<boolean>(() =>
-  hentasis.state.open ? false : busy.value || trouble.value !== '' || stream.value === null,
+/** Заслонка нужна, пока кадра нет; при открытом Hentasis и на hx-тайтлах
+ * (выбор лежит на источнике 18+) kodik-ошибки заслонкой не показываем. */
+const veil = computed<boolean>(() => {
+  if (hxTouched.value) return false
+  return busy.value || trouble.value !== '' || stream.value === null
+})
+/** Тайтл, где человек уже смотрел/выбирал Hentasis: его kodik-ошибки — не заслонка. */
+const hxTouched = computed<boolean>(
+  () => hentasis.state.open || hentasis.state.picked >= 0 || hentasis.state.matchedUrl !== '',
 )
-
 /** Что написано на заслонке: случаев без ссылки три, и путать их нельзя — при смене озвучки
  * серия выбрана и ждёт ссылки, а «Серия не выбрана» читалось как сброс выбора. */
 const veilWord = computed<string>(() => {
@@ -678,6 +683,8 @@ function pauseMainVideo(): void {
   videoEl.value?.pause()
 }
 
+/** Файл Hentasis играет в общем теге: ключ места — spotKey с меткой 'hx',
+ * поэтому «продолжить с…» и история работают без отдельных механизмов. */
 /** Файл Hentasis играет в общем теге: ключ места — spotKey с меткой 'hx',
  * поэтому «продолжить с…» и история работают без отдельных механизмов. */
 function startHentasis(): void {
