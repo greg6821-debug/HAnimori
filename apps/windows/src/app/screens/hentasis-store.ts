@@ -57,14 +57,14 @@ export interface HentasisState {
 
 const state = reactive<HentasisState>({
   animeId: 0,
-  basesText: ['', '', ''],
-  manualUrls: ['', '', ''],
   busy: false,
   slotBusy: -1,
   trouble: '',
   notice: '',
   matchedTitles: ['', '', ''],
   matchedUrls: ['', '', ''],
+  manualUrls: ['', '', ''],
+  basesText: ['', '', ''],
   infoTitle: '',
   files: [],
   picked: -1,
@@ -134,8 +134,8 @@ async function fetchTitles(
 function resetResult(): void {
   state.trouble = ''
   state.notice = ''
-  state.matchedTitles = ['', '', '']
-  state.matchedUrls = ['', '', '']
+  state.matchedTitles.splice(0, state.matchedTitles.length, '', '', '')
+  state.matchedUrls.splice(0, state.matchedUrls.length, '', '', '')
   state.infoTitle = ''
   state.files = []
   state.picked = -1
