@@ -169,13 +169,14 @@ async function loadSlot(slot: number, url: string, remember: boolean): Promise<b
 
   try {
     const info = await getHentasisInfo(url, fetchPage)
-    state.matchedTitles[slot] = info.title ?? url
-    state.matchedUrls[slot] = url
+    state.matchedTitles.splice(slot, 1, info.title ?? url)
+    state.matchedUrls.splice(slot, 1, url)
 
     if (remember) {
       const map = readLinks()
-      const record = map[String(state.animeId)] ?? { urls: [null, null, null] }
-      record.urls[slot] = url
+      const record =
+        map[String(state.animeId)] ?? { urls: [null, null, null] }
+      record.urls.splice(slot, 1, url)
       writeLinks(map)
     }
 
@@ -192,8 +193,8 @@ async function loadSlot(slot: number, url: string, remember: boolean): Promise<b
     return true
   } catch (e: unknown) {
     Logger('WARN', `Hentasis: слот ${slot + 1} не открылся (${url})`, e)
-    state.matchedTitles[slot] = ''
-    state.matchedUrls[slot] = ''
+    state.matchedTitles.splice(slot, 1, '')
+    state.matchedUrls.splice(slot, 1, '')
     if (state.trouble === '') state.trouble = `Домен ${slot + 1}: ${say(e)}`
     return false
   } finally {
