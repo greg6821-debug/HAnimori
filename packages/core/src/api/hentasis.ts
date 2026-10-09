@@ -591,12 +591,12 @@ export async function resolveHentasisDirect(
     }
     visited.push(url);
 
-    let html: string;
+    let html: string
     try {
-      html = await fetchPage(url);
+      html = await fetchPage(url)
     } catch (e) {
-      const why = e instanceof Error ? e.message : String(e);
-      throw new Error(`Страница плеера не отдалась (${url}): ${why}`);
+      const why = e instanceof Error ? e.message : String(e)
+      throw new Error(`Страница плеера не отдалась (${url}): ${why}`, { cause: e })
     }
 
     let frame: string | undefined;
