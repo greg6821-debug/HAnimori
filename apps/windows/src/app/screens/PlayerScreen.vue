@@ -1220,8 +1220,8 @@ onMounted(() => {
 })
 
 watch(
-  () => [hentasis.state.open, hentasis.state.picked] as const,
-  ([open], [wasOpen]) => {
+  () => [hentasis.state.open, hentasis.state.picked, hentasis.state.files[hentasis.state.picked]?.url ?? ''] as const,
+  ([open, , url], [wasOpen, , wasUrl]) => {
     if (open) {
       const file = hentasis.state.files[hentasis.state.picked]
       if (file !== undefined && file.kind !== 'iframe') {
