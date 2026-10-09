@@ -309,7 +309,7 @@ fn page(stream: TcpStream, title: &str, text: &str, script: &str) {
     let body = [
         "<!doctype html><html lang=\"ru\"><head><meta charset=\"utf-8\">",
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
-        "<title>AniMori</title><style>:root{color-scheme:dark}",
+        "<title>HAniMori</title><style>:root{color-scheme:dark}",
         "body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;",
         "background:#0b1622;color:#e7edf7;font:16px/1.5 system-ui,sans-serif;text-align:center}",
         "h1{margin:0 0 8px;font-size:22px;color:#4c9ffe}",
@@ -523,7 +523,7 @@ fn start_receiver(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Окно входа. Своё, а не системный браузер: движок окна работает в общем окружении приложения, где уже настроен прокси, — без него страница входа просто не откроется там, где AniList недоступен.
+/// Окно входа. Своё, а не системный браузер: движок окна работает в общем окружении приложения, где уже настроен прокси — страница входа идёт тем же каналом, что и запросы программы.
 fn open_login_window(app: &AppHandle, url: &str) -> Result<(), String> {
     let address: Url = url
         .parse()

@@ -1,262 +1,243 @@
 <script setup lang="ts">
-// Панель источника Hentasis (18+): адрес страницы тайтла, кнопка сохранения,
-// список «Файл 1..N» как на сайте и свой встроенный плеер.
-// Основной поток kodik/aniliberty не трогает: играет своим кадром,
-// а главный <video> ставит на паузу событием started.
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+// Бокс источника Hentasis (18+) в списке сбоку: домены, автопоиск по названиям,
+// ручная ссылка и выбор файла. Кадр играет в общем теге основного плеера.
+import { computed, ref, watch } from 'vue'
 
-import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
+import type { HentasisFile } from '@/api/hentasis'
+import { Bridge } from '@/bridge'
 
-import Hls from 'hls.js'
-
-// Путь до core — такой же, каким player-view.ts импортирует kodik/aniliberty.
-import { getHentasisInfo, type HentasisFile } from '@/api/hentasis'
+import { hentasis } from './hentasis-store'
 
 const props = defineProps<{ animeId: number }>()
 
-const emit = defineEmits<{ started: [] }>()
+const state = hentasis.state
 
-/** Адреса лежат в localStorage: у каждого тайтла своя ссылка и последний выбранный файл. */
-interface SavedLink {
-  url: string
-  file?: number
-}
+/** Файлы в боксе спрятаны за переключателем: основной путь — списки плеера
+ * («Озвучка»/«Серии»), здесь они остаются запасным доступом. */
+const showFiles = ref(false)
+/** Настройки поиска (домены и заголовки) спрятаны за переключателем: нужны редко,
+ * а места в боксе занимают заметно. */
+const showSettings = ref(false)
+/** Наружу через оболочку — тем же путём, что ссылки описания на карточке:
+ * в WebView2 новый таргет молча отбрасывается, а переход в том же окне унёс бы приложение. */
+async function openSite(): Promise<void> {
+  const url = state.matchedUrl
+  if (url === '') return
 
-const STORE_KEY = 'animori:hentasis-links'
-
-const url = ref('')
-const infoTitle = ref('')
-const files = ref<HentasisFile[]>([])
-const picked = ref(-1)
-const busy = ref(false)
-const trouble = ref('')
-
-const frame = ref<'none' | 'video' | 'iframe'>('none')
-const frameSrc = ref('')
-
-const videoEl = ref<HTMLVideoElement | null>(null)
-
-let hls: Hls | null = null
-
-function readMap(): Record<string, SavedLink> {
   try {
-    return JSON.parse(localStorage.getItem(STORE_KEY) ?? '{}') as Record<string, SavedLink>
-  } catch {
-    return {}
-  }
-}
-
-function persist(): void {
-  const map = readMap()
-  const value = url.value.trim()
-
-  if (value === '') {
-    delete map[String(props.animeId)]
-  } else {
-    const record: SavedLink = { url: value }
-    const file = picked.value >= 0 ? picked.value : readMap()[String(props.animeId)]?.file
-    if (file !== undefined && file >= 0) record.file = file
-    map[String(props.animeId)] = record
-  }
-
-  localStorage.setItem(STORE_KEY, JSON.stringify(map))
-}
-
-function reset(): void {
-  hls?.destroy()
-  hls = null
-  files.value = []
-  picked.value = -1
-  infoTitle.value = ''
-  trouble.value = ''
-  frame.value = 'none'
-  frameSrc.value = ''
-}
-
-/** HTML страницы тайтла: через Rust-сторону Tauri, чтобы CORS не мешал. */
-async function fetchPage(page: string): Promise<string> {
-  const res = await tauriFetch(page, {
-    headers: { Referer: 'https://hentasis1.top/', 'Accept-Language': 'ru,en;q=0.8' },
-  })
-  if (!res.ok) throw new Error(`Сайт ответил HTTP ${res.status} — попробуй ещё раз`)
-  return res.text()
-}
-
-async function load(): Promise<void> {
-  const page = url.value.trim()
-  if (page === '' || busy.value) return
-
-  busy.value = true
-  trouble.value = ''
-  files.value = []
-  picked.value = -1
-  frame.value = 'none'
-  hls?.destroy()
-  hls = null
-
-  let remembered = 0
-  try {
-    const info = await getHentasisInfo(page, fetchPage)
-    files.value = info.files
-    infoTitle.value = info.title ?? ''
-    remembered = readMap()[String(props.animeId)]?.file ?? 0
-    persist()
+    await Bridge.shell.openExternal(url)
   } catch (e: unknown) {
-    trouble.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    busy.value = false
-  }
-
-  if (files.value.length > 0) {
-    void play(remembered < files.value.length ? remembered : 0)
+    state.trouble = `Браузер не открылся: ${e instanceof Error ? e.message : String(e)}`
   }
 }
 
-function saveAndLoad(): void {
-  persist()
-  void load()
-}
-
-async function play(index: number): Promise<void> {
-  const file = files.value[index]
-  if (file === undefined) return
-
-  picked.value = index
-  persist()
-
-  hls?.destroy()
-  hls = null
-
-  if (file.kind === 'iframe') {
-    frame.value = 'iframe'
-    frameSrc.value = file.url
-    emit('started')
-    return
-  }
-
-  frame.value = 'video'
-  frameSrc.value = ''
-  await nextTick()
-
-  const el = videoEl.value
-  if (el === null) return
-
-  if (file.kind === 'hls') {
-    if (!Hls.isSupported()) {
-      trouble.value = 'HLS-поток в этом WebView не запускается — открой файл на сайте.'
-      return
-    }
-    hls = new Hls()
-    hls.loadSource(file.url)
-    hls.attachMedia(el)
-  } else {
-    el.src = file.url
-  }
-
-  void el.play().catch(() => {})
-  emit('started')
-}
-
-// Новый тайтл — новая ссылка: сброс и автозагрузка сохранённого адреса.
 watch(
   () => props.animeId,
-  () => {
-    reset()
-    url.value = readMap()[String(props.animeId)]?.url ?? ''
-    if (url.value !== '') void load()
+  (id) => {
+    showFiles.value = false
+    hentasis.bindAnime(id)
   },
   { immediate: true },
 )
 
-onBeforeUnmount(() => {
-  hls?.destroy()
-  hls = null
+/** Есть ли пометки хоть у одного файла: без них рисуем простую оборку, как раньше. */
+const hasNotes = computed<boolean>(() => state.files.some((file) => file.note !== undefined))
+
+/** Группа = ВСЕ файлы с одинаковой пометкой (вид + команда), где бы они ни стояли
+ * в списке: две озвучки от разных команд — две строки, два субтитра от разных
+ * переводчиков — ещё две. Порядок групп — по первому появлению пометки (порядок
+ * сайта), внутри группы — порядок сайта. Файлы без пометок не склеиваются:
+ * у каждого своя строка, как у файлов без примечания в целом. */
+interface FileGroup {
+  note: string
+  items: { file: HentasisFile; index: number }[]
+}
+
+const groups = computed<FileGroup[]>(() => {
+  const byNote = new Map<string, FileGroup>()
+
+  for (let i = 0; i < state.files.length; i += 1) {
+    const file = state.files[i]
+    if (file === undefined) continue
+
+    const note = file.note ?? ''
+    // Файл без пометки — группа из одного: пустая строка не должна склеивать их в ряд.
+    const key = note === '' ? `\u0000${i}` : note
+
+    const found = byNote.get(key)
+    if (found !== undefined) found.items.push({ file, index: i })
+    else byNote.set(key, { note, items: [{ file, index: i }] })
+  }
+
+  return [...byNote.values()]
 })
 </script>
 
 <template>
   <div class="am-hx">
+    <button class="am-hx__file" type="button" @click="showSettings = !showSettings">
+      {{ showSettings ? 'Скрыть настройки поиска' : 'Настройки поиска' }}
+    </button>
+
+    <template v-if="showSettings">
+      <label class="am-hx__field">
+        <span class="am-hx__cap">Домены для поиска (через запятую)</span>
+        <input
+          v-model="state.basesText"
+          class="am-hx__url"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="https://hentasis1.top"
+          aria-label="Домены Hentasis"
+          @keydown.stop
+          @change="hentasis.setBases(state.basesText)"
+        />
+      </label>
+
+      <label class="am-hx__field">
+        <span class="am-hx__cap">Заголовки запроса (Имя: значение, по одному в строке)</span>
+        <textarea
+          v-model="state.headersText"
+          class="am-hx__url am-hx__headers"
+          rows="4"
+          spellcheck="false"
+          autocomplete="off"
+          aria-label="Заголовки запроса"
+          @keydown.stop
+          @change="hentasis.setHeaders(state.headersText)"
+        ></textarea>
+      </label>
+
+      <button class="am-hx__file" type="button" @click="hentasis.resetSettings()">
+        Вернуть по умолчанию
+      </button>
+    </template>
+
     <div class="am-hx__row">
-      <input
-        v-model="url"
-        class="am-hx__url"
-        type="url"
-        inputmode="url"
-        spellcheck="false"
-        autocomplete="off"
-        placeholder="https://hentasis1.top/985-….html"
-        aria-label="Адрес страницы Hentasis"
-        @keydown.stop
-      />
       <button
         class="am-hx__save"
         type="button"
-        :disabled="busy || url.trim() === ''"
-        @click="saveAndLoad"
+        :disabled="state.busy"
+        @click="hentasis.runSearch()"
       >
-        Сохранить
+        Искать по названию
+      </button>
+      <button
+        v-if="state.manualUrl !== ''"
+        class="am-hx__file"
+        type="button"
+        :disabled="state.busy"
+        @click="hentasis.forget()"
+      >
+        Забыть
       </button>
     </div>
 
-    <p v-if="busy" class="am-hx__note" role="status">Читаю страницу Hentasis…</p>
-    <p v-else-if="trouble !== ''" class="am-hx__note am-hx__note--err" role="alert">
-      {{ trouble }}
+    <p v-if="state.busy && state.phase === 'search'" class="am-hx__note" role="status">
+      Ищу тайтл по названиям с AniList…
     </p>
-    <p v-else-if="files.length > 0" class="am-hx__note" role="status">
-      {{ infoTitle }} · файлов: {{ files.length }} · порядок как на сайте
+    <p v-if="state.resolving" class="am-hx__note" role="status">Открываю файл…</p>
+    <p v-else-if="state.busy" class="am-hx__note" role="status">Читаю страницу…</p>
+    <p v-else-if="state.trouble !== ''" class="am-hx__note am-hx__note--err" role="alert">
+      {{ state.trouble }}
+    </p>
+    <p v-else-if="state.notice !== ''" class="am-hx__note" role="status">{{ state.notice }}</p>
+    <p v-else-if="state.matchedTitle !== ''" class="am-hx__note" role="status">
+      Нашёл: {{ state.matchedTitle }}
+      <template v-if="state.matchedScore > 0"> (совпадение {{ state.matchedScore }}%)</template>
     </p>
     <p v-else class="am-hx__note">
-      Ссылка на страницу тайтла с Hentasis — и «Сохранить»: файлы появятся здесь же.
+      Найду страницу сам по названиям с AniList — или вставь ниже домен/ссылку.
     </p>
 
-    <div v-if="files.length > 0" class="am-hx__files">
-      <button
-        v-for="(file, index) in files"
-        :key="file.url"
-        class="am-hx__file"
-        :class="{ 'am-hx__file--on': index === picked }"
-        type="button"
-        @click="play(index)"
-      >
-        {{ file.label }}
+    <label class="am-hx__field">
+      <span class="am-hx__cap">Домен или ссылка на тайтл</span>
+      <span class="am-hx__row">
+        <input
+          v-model="state.manualUrl"
+          class="am-hx__url"
+          type="text"
+          inputmode="url"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="https://hentasis1.top или https://…/1094-….html"
+          aria-label="Домен или ссылка на страницу Hentasis"
+          @keydown.stop
+        />
+        <button
+          class="am-hx__save"
+          type="button"
+          :disabled="state.busy || state.manualUrl.trim() === ''"
+          @click="hentasis.useManual()"
+        >
+          Открыть
+        </button>
+      </span>
+    </label>
+
+    <!-- Файлы спрятаны: они дублируют список «Серии» плеера. Показываются по желанию. -->
+    <template v-if="state.files.length > 0">
+      <button class="am-hx__file" type="button" @click="showFiles = !showFiles">
+        {{ showFiles ? 'Спрятать файлы' : `Показать файлы · ${state.files.length}` }}
       </button>
-    </div>
 
-    <div v-if="frame === 'video'" class="am-hx__stage">
-      <video
-        ref="videoEl"
-        class="am-hx__frame"
-        controls
-        playsinline
-        preload="metadata"
-        referrerpolicy="no-referrer"
-      ></video>
-    </div>
-    <div v-else-if="frame === 'iframe'" class="am-hx__stage">
-      <iframe
-        class="am-hx__frame"
-        :src="frameSrc"
-        title="Плеер Hentasis"
-        allow="autoplay; fullscreen; encrypted-media"
-        allowfullscreen
-        referrerpolicy="no-referrer"
-      ></iframe>
-    </div>
+      <template v-if="showFiles">
+        <div v-if="!hasNotes" class="am-hx__files">
+          <button
+            v-for="(file, index) in state.files"
+            :key="file.url"
+            class="am-hx__file"
+            :class="{ 'am-hx__file--on': index === state.picked }"
+            type="button"
+            @click="hentasis.play(index)"
+          >
+            {{ file.label }}
+          </button>
+        </div>
 
-    <p v-if="url.trim() !== ''" class="am-hx__open">
-      <a :href="url" target="_blank" rel="noreferrer noopener">Открыть на сайте ↗</a>
-    </p>
+        <div v-else class="am-hx__groups">
+          <div v-for="(group, gi) in groups" :key="gi" class="am-hx__group">
+            <button
+              v-for="item in group.items"
+              :key="item.file.url"
+              class="am-hx__filecard"
+              :class="{ 'am-hx__filecard--on': item.index === state.picked }"
+              type="button"
+              @click="hentasis.play(item.index)"
+            >
+              <span>{{ item.file.label }}</span>
+              <span v-if="item.file.note" class="am-hx__file-note">{{ item.file.note }}</span>
+            </button>
+          </div>
+        </div>
+      </template>
+    </template>
+
+    <button v-if="state.matchedUrl !== ''" class="am-hx__link" type="button" @click="openSite()">
+      Открыть страницу на сайте ↗
+    </button>
   </div>
 </template>
 
 <style scoped>
-/* Цвета взяты нейтральные — при желании подгони под палитру приложения. */
 .am-hx {
   display: flex;
   flex-direction: column;
   gap: 8px;
   font-size: 13px;
   color: #e8e8ee;
+}
+
+.am-hx__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.am-hx__cap {
+  font-size: 11px;
+  opacity: 0.7;
 }
 
 .am-hx__row {
@@ -306,12 +287,7 @@ onBeforeUnmount(() => {
   color: #ff8080;
 }
 
-.am-hx__files {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
+/* Обычная однострочная кнопка: ею пользуются и «Забыть», и файлы без пометок. */
 .am-hx__file {
   border: 1px solid #2b2b3d;
   border-radius: 8px;
@@ -322,31 +298,77 @@ onBeforeUnmount(() => {
   font: inherit;
 }
 
+.am-hx__file:disabled {
+  opacity: 0.5;
+}
+
 .am-hx__file--on {
   border-color: #e5484d;
   background: #2a1215;
 }
 
-.am-hx__stage {
+/* Карточка файла с пометкой: две строки, текст сверху вниз. */
+.am-hx__filecard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border: 1px solid #2b2b3d;
   border-radius: 8px;
-  overflow: hidden;
-  background: #000;
+  padding: 5px 10px;
+  background: #16161f;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
-.am-hx__frame {
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 9;
+.am-hx__filecard--on {
+  border-color: #e5484d;
+  background: #2a1215;
+}
+
+.am-hx__file-note {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* Группы: столбик строк с зазором ~1/3 высоты кнопки (кнопка ~30px → 10px);
+   внутри группы свои кнопки переносятся, но чужие в строку не попадают. */
+.am-hx__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.am-hx__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.am-hx__link {
+  padding: 0;
+  background: none;
   border: 0;
-}
-
-.am-hx__open {
-  margin: 0;
-}
-
-.am-hx__open a {
   color: #8ab4ff;
   font-size: 12px;
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.am-hx__link:hover {
+  text-decoration: underline;
+}
+
+.am-hx__headers {
+  min-height: 72px;
+  resize: vertical;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
 }
 </style>

@@ -14,9 +14,11 @@ import {
 
 import { Logger } from '@/utils/logger'
 import HentasisBox from './HentasisBox.vue'
+import HentasisStage from './HentasisStage.vue'
+import { hentasis } from './hentasis-store'
 import EmptyMark from '../components/EmptyMark.vue'
 import { currentRoute } from '../router'
-
+import HentasisOthers from './HentasisOthers.vue'
 import { attachCast, type Cast, type CastState } from './player-cast'
 import { attachPlayback, type DeadKind, type Playback } from './player-hls'
 import {
@@ -47,6 +49,8 @@ import {
   splitSpot,
   spotKey,
   whenWatchReady,
+  peekPick,
+  rememberPick,
   type WatchWhat,
 } from './player-keep'
 import { episodeLabel, usePlayer } from './player-view'
@@ -176,6 +180,71 @@ const mediaId = computed<number>(() => {
   return Number.isFinite(raw) && raw > 0 ? raw : 0
 })
 
+/** Кадр Hentasis открыт: kodik-накладки (пропуски, переключение серий) прячем. */
+const hxOn = computed<boolean>(() => hentasis.state.open)
+
+/** Открыт именно iframe-файл: свой слой поверх, клавиатура — его. */
+const hxFrameOn = computed<boolean>(() => {
+  const file = hentasis.state.files[hentasis.state.picked]
+  return hentasis.state.open && file !== undefined && file.kind === 'iframe'
+})
+
+/** Выбранная группа Hentasis: -1 — обычные источники, иначе индекс в hxGroups. */
+const hxVoice = ref(-1)
+
+const hxGroups = hentasis.groups
+const hxGroup = computed(() =>
+  hxVoice.value >= 0 ? (hxGroups.value[hxVoice.value] ?? null) : null,
+)
+
+/** Где в группах лежит текущий picked: группа и номер внутри неё (с единицы). */
+function hxAddress(): { group: number; number: number } | null {
+  const all = hxGroups.value
+  for (let g = 0; g < all.length; g += 1) {
+    const at = all[g]?.items.findIndex((it) => it.index === hentasis.state.picked) ?? -1
+    if (at >= 0) return { group: g, number: at + 1 }
+  }
+  return null
+}
+
+function pickHxVoice(gi: number): void {
+  hxVoice.value = gi
+  trouble.value = ''
+}
+
+function pickHxEpisode(gi: number, at: number): void {
+  const group = hxGroups.value[gi]
+  const item = group?.items[at]
+  if (group === undefined || item === undefined) return
+
+  hxVoice.value = gi
+  rememberPick(mediaId.value, `hx:${gi}`, at + 1, 0)
+  hentasis.play(item.index)
+}
+
+function hxSeenShare(gi: number, at: number): number {
+  return Math.round(peekShare(spotKey(mediaId.value, `hx:${gi}`, at + 1)) * 100)
+}
+
+function hxStep(delta: number): void {
+  const addr = hxAddress()
+  if (addr !== null) pickHxEpisode(addr.group, addr.number - 1 + delta)
+}
+
+/** Кодик-озвучка из списка: открытый Hentasis аккуратно закрываем. */
+function pickKodikVoice(key: string): void {
+  if (hentasis.state.open) hentasis.close()
+  pickVoice(key)
+}
+
+function doNext(): void {
+  if (hentasis.state.open) {
+    hxStep(1)
+    return
+  }
+  if (hasNext.value) nextEpisode()
+}
+
 const {
   busy,
   trouble,
@@ -209,10 +278,86 @@ let cast: Cast | null = null
 /** Ключ места остановки того, что сейчас открыто. */
 let spot = ''
 
+/** Восстановление hx-выбора из истории: ждём, пока файлы догрузятся. */
+let hxResume: { gi: number; ep: number } | null = null
+
+/** Сторожок hx-файла: метаданные не приехали за 25 секунд — файл не грузится. */
+let hxWatchdog = 0
+/** Дорожки субтитров, созданные для hx-файла: чистятся при смене/закрытии. */
+let hxSubTracks: TextTrack[] = []
+
+function clearHxSubtitles(): void {
+  for (const track of hxSubTracks) {
+    track.mode = 'disabled'
+    while (track.cues !== null && track.cues.length > 0) {
+      const cue = track.cues[0]
+      if (cue === undefined) break
+      track.removeCue(cue)
+    }
+  }
+  hxSubTracks = []
+}
+
+let hxSubsBusy = false
+
+async function attachHxSubtitles(): Promise<void> {
+  if (hxSubsBusy) return
+  hxSubsBusy = true
+
+  try {
+    clearHxSubtitles()
+
+    const subs = hentasis.state.subtitles
+    const el = videoEl.value
+    if (el === null || subs.length === 0) return
+
+    const preferred = subs.find((s) => /рус|russ/i.test(s.label)) ?? subs[0]
+    if (preferred === undefined) return
+
+    const cues = await hentasis.loadSubtitleCues(preferred.src)
+    const track = el.addTextTrack('subtitles', preferred.label, 'ru')
+    track.mode = 'showing'
+    for (const cue of cues) track.addCue(new VTTCue(cue.start, cue.end, cue.text))
+    hxSubTracks.push(track)
+    Logger('INFO', `Плеер: субтитры Hentasis показываются (${preferred.label}, ${cues.length})`)
+  } catch (e: unknown) {
+    Logger('WARN', 'Плеер: субтитры Hentasis не добрались', e)
+  } finally {
+    hxSubsBusy = false
+  }
+}
+
+/** Восстановление hx-выбора: играем, как только группы на месте; если они уже
+ * загружены — срабатывает сразу, без ожидания. */
+function tryHxResume(): void {
+  if (hxResume === null) return
+  const group = hxGroups.value[hxResume.gi]
+  const item = group?.items[hxResume.ep - 1]
+  if (group === undefined || item === undefined) return
+  hxVoice.value = hxResume.gi
+  hentasis.play(item.index)
+  hxResume = null
+}
+
+watch(
+  () => hxGroups.value.length,
+  () => {
+    tryHxResume()
+  },
+)
+
 /** Снимок для истории. Ключ главнее состояния экрана: метку пишут и после смены выбора,
  * поэтому серия и подпись озвучки берутся из самого ключа. */
 function aboutSpot(key: string): WatchWhat {
   const parts = splitSpot(key)
+
+  // Файл Hentasis: среди озвучек его нет, подпись — метка источника и пометка файла.
+  if (parts !== null && parts.voiceKey.startsWith('hx:')) {
+    const gi = Number(parts.voiceKey.slice(3))
+    const label = hxGroups.value[gi]?.label ?? 'Hentasis'
+    return { title: mainTitle.value, cover: cover.value, voiceLabel: `Hentasis · ${label}` }
+  }
+
   const label =
     parts === null ? '' : (voices.value.find((v) => v.key === parts.voiceKey)?.label ?? '')
 
@@ -254,9 +399,16 @@ const coverStyle = computed<{ backgroundImage: string }>(() => ({
   backgroundImage: cover.value === null ? 'none' : `url("${cover.value}")`,
 }))
 
-/** Заслонка нужна, пока кадра нет: чёрный прямоугольник ничего не говорит. */
-const veil = computed<boolean>(() => busy.value || trouble.value !== '' || stream.value === null)
-
+/** Заслонка нужна, пока кадра нет; при открытом Hentasis и на hx-тайтлах
+ * (выбор лежит на источнике 18+) kodik-ошибки заслонкой не показываем. */
+const veil = computed<boolean>(() => {
+  if (hxTouched.value) return false
+  return busy.value || trouble.value !== '' || stream.value === null
+})
+/** Тайтл, где человек уже смотрел/выбирал Hentasis: его kodik-ошибки — не заслонка. */
+const hxTouched = computed<boolean>(
+  () => hentasis.state.open || hentasis.state.picked >= 0 || hentasis.state.matchedUrl !== '',
+)
 /** Что написано на заслонке: случаев без ссылки три, и путать их нельзя — при смене озвучки
  * серия выбрана и ждёт ссылки, а «Серия не выбрана» читалось как сброс выбора. */
 const veilWord = computed<string>(() => {
@@ -430,6 +582,7 @@ function start(url: string): void {
 /** Поднялась заслонка — кадру играть нечего. Порядок важен: сначала пишем место остановки
  * (нужны живые секунда и длина), потом гасим тег; ключ забывается последним. */
 function stopFrame(): void {
+  if (hentasis.state.open) return
   const el = videoEl.value
   if (el !== null && spot !== '') {
     rememberSpot(spot, Math.floor(el.currentTime), total.value, aboutSpot(spot))
@@ -493,6 +646,7 @@ async function renewLink(why: string): Promise<boolean> {
 /** Присмотр за сроком: меняем адрес заранее, пока старый играет. Сказать человеку есть о чём
  * только когда ссылка мертва и новую не дают который раз подряд. */
 function watchLink(): void {
+  if (hentasis.state.open) return
   if (veil.value || renewOn.value) return
 
   const left = linkLeft()
@@ -509,6 +663,14 @@ function watchLink(): void {
 /** Поток встал. Мёртвый адрес — норма добычи: берём новый и продолжаем с той же секунды,
  * жалоба подняла бы заслонку и убила место в серии. Отказ сети идёт человеку сразу. */
 async function onStreamDead(text: string, kind: DeadKind): Promise<void> {
+  if (hentasis.state.open) {
+    hentasis.state.trouble =
+      'Файл не проигрался (заблокирован или недоступен) — попробуй другой файл.'
+    Logger('WARN', 'Плеер: файл Hentasis не играет, возвращаю обычный поток')
+    hentasis.close()
+    return
+  }
+
   if (kind === 'link' && renewMisses < RENEW_TRIES) {
     if (await renewLink('поток оборвался')) return
   }
@@ -519,6 +681,78 @@ async function onStreamDead(text: string, kind: DeadKind): Promise<void> {
 /** Hentasis играет своим кадром: главный ставим на паузу, чтобы шло только одно. */
 function pauseMainVideo(): void {
   videoEl.value?.pause()
+}
+
+/** Файл Hentasis играет в общем теге: ключ места — spotKey с меткой 'hx',
+ * поэтому «продолжить с…» и история работают без отдельных механизмов. */
+/** Файл Hentasis играет в общем теге: ключ места — spotKey с меткой 'hx',
+ * поэтому «продолжить с…» и история работают без отдельных механизмов. */
+function startHentasis(): void {
+  const file = hentasis.state.files[hentasis.state.picked]
+  const el = videoEl.value
+  if (file === undefined || file.kind === 'iframe' || el === null) return
+
+  // место прежнего воспроизведения записываем: после смены источника события тега его уже не спасут
+  if (spot !== '') {
+    rememberSpot(spot, Math.floor(el.currentTime), total.value, aboutSpot(spot))
+  }
+
+  const addr = hxAddress()
+  if (addr === null) return
+  const key = spotKey(mediaId.value, `hx:${addr.group}`, addr.number)
+
+  // Секунда: живой кадр главнее склада — при переносе узла склад мог не успеть.
+  const live = el.currentTime > 0 && spot === key ? el.currentTime : 0
+  const from = Math.max(live, Math.max(0, peekSpot(key)))
+  spot = key
+  at.value = Math.floor(from)
+  total.value = 0
+  ready.value = 0
+  hoverShare.value = -1
+
+  Logger('INFO', `Hentasis: старт файла (${file.kind}) ${file.url}`)
+
+  // Сторожок для ЛЮБОГО вида файла: метаданные не приехали за 25с — файл не грузится.
+  if (hxWatchdog !== 0) window.clearTimeout(hxWatchdog)
+  hxWatchdog = window.setTimeout(() => {
+    hxWatchdog = 0
+    if (!hentasis.state.open || total.value > 0) return
+    hentasis.state.trouble =
+      'Файл найден, но не грузится (сеть, защита CDN или CORS). Подробности в журнале.'
+  }, 25_000)
+
+  void attachHxSubtitles()
+
+  if (file.kind === 'hls') {
+    if (playback === null) return
+    playback.open(file.url, from, true)
+    applyRate()
+    showResume(from)
+    return
+  }
+
+  // mp4 кладём в тег напрямую: player-hls умеет манифесты, прямой файл — дело тега.
+  playback?.close()
+  el.src = file.url
+  applyRate()
+
+  if (from > 0) {
+    const back = (): void => {
+      el.removeEventListener('loadedmetadata', back)
+      el.currentTime = from
+    }
+    el.addEventListener('loadedmetadata', back)
+  }
+
+  void el.play().catch(() => {})
+  showResume(from)
+}
+
+/** Возврат к обычному потоку после Hentasis: kodik-серия продолжает со своего места. */
+function resumeKodik(): void {
+  if (veil.value) return
+  const url = stream.value?.preferred.url ?? ''
+  if (url !== '') start(url)
 }
 
 /** «Сначала»: человек не согласен с меткой. Забываем её, чтобы не спорить. */
@@ -581,7 +815,11 @@ function onMeta(): void {
 
 /** Конец серии: следующая сама. Смотренное забывается: оно пройдено. */
 function onEnded(): void {
-  // Метка уходит, а в истории серия встаёт целой: досмотренное не должно стоять там оборванным на предпоследней секунде.
+  if (hentasis.state.open) {
+    if (spot !== '') finishSpot(spot, total.value, aboutSpot(spot))
+    hxStep(1) // за краем группы pickHxEpisode молчит
+    return
+  }
   if (spot !== '') finishSpot(spot, total.value, aboutSpot(spot))
   if (hasNext.value) nextEpisode()
 }
@@ -656,6 +894,10 @@ function doSkip(): void {
 }
 
 function doPrev(): void {
+  if (hentasis.state.open) {
+    hxStep(-1)
+    return
+  }
   if (prevNumber.value > 0) pickEpisode(prevNumber.value)
 }
 
@@ -858,7 +1100,7 @@ const leftKeys = computed<Key[]>(() => [
     run: doToggle,
   },
   { tip: 'Вперёд 10 секунд', sign: SIGN.ahead, run: () => nudge(STEP_SEC) },
-  { tip: 'Следующая серия', sign: SIGN.next, off: !hasNext.value, run: nextEpisode },
+  { tip: 'Следующая серия', sign: SIGN.next, off: !hasNext.value, run: doNext },
 ])
 
 /** Правый кластер: два пути кадра из окна и полный экран (всегда последний). Кнопки PiP нет,
@@ -932,7 +1174,7 @@ function act(intent: PlayerIntent): void {
       doPrev()
       return
     case 'nextEpisode':
-      if (hasNext.value) nextEpisode()
+      doNext()
       return
     case 'skip':
       doSkip()
@@ -957,6 +1199,15 @@ function act(intent: PlayerIntent): void {
 
 /** Клавиатура и пульт: слушаем окно, потому что фокус бывает нигде. */
 function onKey(event: KeyboardEvent): void {
+  // Свой слой iframe забирает клавиатуру целиком; у видео-файла клавиши общие с плеером.
+  if (hxFrameOn.value) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      hentasis.close()
+    }
+    return
+  }
+
   if (mediaId.value === 0) return
 
   const here = document.activeElement
@@ -1011,7 +1262,13 @@ onMounted(() => {
     applySound()
     applyRate()
   }
-
+  // Вернулись на экран с уже выбранным файлом Hentasis: тег после размонтирования пуст —
+  // ставим источник заново, место подскажет история.
+  if (hentasis.state.open) {
+    const hxFile = hentasis.state.files[hentasis.state.picked]
+    if (hxFile !== undefined && hxFile.kind !== 'iframe') startHentasis()
+    else pauseMainVideo()
+  }
   window.addEventListener('keydown', onKey)
   window.addEventListener('pointerdown', onDown)
 
@@ -1019,14 +1276,56 @@ onMounted(() => {
   renewTimer = window.setInterval(watchLink, RENEW_TICK_MS)
 
   // Метки нужны и полке серий, и первому кадру: просим их пораньше.
-  void whenWatchReady()
+  void whenWatchReady().then(() => {
+    const seen = peekPick(mediaId.value)
+    if (seen === null || !seen.voiceKey.startsWith('hx:')) return
+
+    hxResume = { gi: Number(seen.voiceKey.slice(3)), ep: seen.episode }
+    // Файлы могли уже лежать в сторе с прошлого захода: длины групп не меняются,
+    // наблюдатель не сработает — пробуем восстановиться сразу.
+    tryHxResume()
+  })
   void load()
 })
+
+watch(
+  () =>
+    [
+      hentasis.state.open,
+      hentasis.state.picked,
+      hentasis.state.files[hentasis.state.picked]?.url ?? '',
+    ] as const,
+  ([open], [wasOpen]) => {
+    if (open) {
+      const file = hentasis.state.files[hentasis.state.picked]
+      if (file !== undefined && file.kind !== 'iframe') {
+        const addr = hxAddress()
+        if (addr !== null) hxVoice.value = addr.group
+        startHentasis()
+      } else {
+        pauseMainVideo()
+      }
+      return
+    }
+    if (wasOpen) {
+      clearHxSubtitles()
+      hxVoice.value = -1
+      if (hxWatchdog !== 0) {
+        window.clearTimeout(hxWatchdog)
+        hxWatchdog = 0
+      }
+      document.body.style.overflow = ''
+      resumeKodik()
+    }
+  },
+)
 
 // Новый адрес — новое аниме: экран не пересобирается, грузим сами.
 watch(mediaId, () => {
   playback?.close()
   spot = ''
+  hxVoice.value = -1
+  hxResume = null
   at.value = 0
   total.value = 0
   ready.value = 0
@@ -1046,13 +1345,29 @@ watch(veil, (on) => {
 watch(
   () => stream.value?.preferred.url ?? '',
   (url) => {
-    if (url !== '') start(url)
+    if (url === '' || hentasis.state.open) return
+    start(url)
   },
 )
 
-// Прокрутка страницы под театром: колесо мыши уводило бы её вслепую, и, выйдя из полного экрана, человек оказывался бы не там, где ушёл.
 watch(wide, (on) => {
   document.body.style.overflow = on ? 'hidden' : ''
+
+  if (!hentasis.state.open) return
+
+  // Перенос узла театром сбрасывает <video>: место снимаем до переноса,
+  // источник ставим заново сразу после и подстраховкой через тик.
+  const el = videoEl.value
+  if (el !== null && spot !== '') {
+    rememberSpot(spot, Math.floor(el.currentTime), total.value, aboutSpot(spot))
+  }
+
+  void nextTick().then(() => startHentasis())
+  // Перестраховка: если подложка пересоздала элемент позже Vue-тикa,
+  // второй пуск на той же секунде безвреден (источник тот же).
+  window.setTimeout(() => {
+    if (hentasis.state.open) startHentasis()
+  }, 60)
 })
 
 onBeforeUnmount(() => {
@@ -1084,7 +1399,7 @@ onBeforeUnmount(() => {
 
   // Отложенная запись уход с экрана не переживёт: просим записать сейчас.
   flushWatchKeep()
-
+  clearHxSubtitles()
   // Уходим с экрана — возвращаем окно: полный экран был нужен кадру, не спискам.
   void wantWindowWide(false)
 
@@ -1132,7 +1447,7 @@ onBeforeUnmount(() => {
                и второй щелчок менял размер окна вместо ожидаемого. -->
           <div class="am-play__stage">
             <video ref="videoEl" class="am-play__frame" playsinline preload="metadata"></video>
-
+            <HentasisStage />
             <button
               v-if="!veil"
               class="am-play__tap"
@@ -1166,7 +1481,12 @@ onBeforeUnmount(() => {
               <button class="am-play__resume-key" type="button" @click="doRestart">Сначала</button>
             </div>
 
-            <button v-if="skip && !veil" class="am-play__skip" type="button" @click="doSkip">
+            <button
+              v-if="skip && !veil && !hxOn"
+              class="am-play__skip"
+              type="button"
+              @click="doSkip"
+            >
               {{ skip.label }}
             </button>
 
@@ -1362,13 +1682,32 @@ onBeforeUnmount(() => {
           <div class="am-play__box">
             <h3 class="am-play__h">Озвучка</h3>
 
-            <ul v-if="voices.length > 0" class="am-play__list" data-zone="voices">
+            <ul
+              v-if="voices.length > 0 || hxGroups.length > 0"
+              class="am-play__list"
+              data-zone="voices"
+            >
+              <li v-for="(group, gi) in hxGroups" :key="`hx-${gi}`">
+                <button
+                  class="am-play__item"
+                  :class="{ 'am-play__item--on': hxVoice === gi }"
+                  type="button"
+                  @click="pickHxVoice(gi)"
+                >
+                  <span class="am-play__word-cut">{{ group.label }}</span>
+                  <span class="am-play__src">Hentasis</span>
+                  <span v-if="group.items.length > 0" class="am-play__time"
+                    >файлов: {{ group.items.length }}</span
+                  >
+                </button>
+              </li>
+
               <li v-for="voice in voices" :key="voice.key">
                 <button
                   class="am-play__item"
                   :class="{ 'am-play__item--on': voice.key === voiceKey }"
                   type="button"
-                  @click="pickVoice(voice.key)"
+                  @click="pickKodikVoice(voice.key)"
                 >
                   <span class="am-play__word-cut">{{ voice.label }}</span>
                   <span class="am-play__src">{{ voice.sourceLabel }}</span>
@@ -1385,7 +1724,30 @@ onBeforeUnmount(() => {
           <div class="am-play__box">
             <h3 class="am-play__h">Серии</h3>
 
-            <ul v-if="episodes.length > 0" class="am-play__list" data-zone="episodes">
+            <ul v-if="hxGroup !== null" class="am-play__list" data-zone="episodes">
+              <li v-for="(item, pos) in hxGroup.items" :key="item.file.url">
+                <button
+                  class="am-play__item"
+                  :class="{ 'am-play__item--on': hentasis.state.picked === item.index }"
+                  type="button"
+                  @click="pickHxEpisode(hxVoice, pos)"
+                >
+                  <span class="am-play__num">{{ pos + 1 }}</span>
+                  <span class="am-play__word-cut">{{ item.file.label }}</span>
+                  <span
+                    v-if="hxSeenShare(hxVoice, pos) > 0"
+                    class="am-play__seen"
+                    aria-hidden="true"
+                  >
+                    <span
+                      class="am-play__seen-fill"
+                      :style="{ width: hxSeenShare(hxVoice, pos) + '%' }"
+                    />
+                  </span>
+                </button>
+              </li>
+            </ul>
+            <ul v-else-if="episodes.length > 0" class="am-play__list" data-zone="episodes">
               <li v-for="item in episodes" :key="item.number">
                 <button
                   class="am-play__item"
@@ -1416,9 +1778,11 @@ onBeforeUnmount(() => {
 
           <div class="am-play__box">
             <h3 class="am-play__h">Hentasis · 18+</h3>
-            <HentasisBox :anime-id="mediaId" @started="pauseMainVideo" />
+            <HentasisBox :anime-id="mediaId" />
           </div>
         </aside>
+
+        <HentasisOthers v-if="!wide" />
       </div>
     </Teleport>
   </section>

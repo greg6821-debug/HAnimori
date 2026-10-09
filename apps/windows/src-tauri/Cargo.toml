@@ -1,7 +1,7 @@
 [package]
-name = "animori"
-version = "3.1.0"
-description = "AniMori — Toolkit for AniList, desktop shell"
+name = "hanimori"
+version = "1.3.1"
+description = "HAniMori — Toolkit for AniList, desktop shell"
 authors = ["foulnike"]
 license = "MIT"
 repository = "https://github.com/foulnike/Animori"

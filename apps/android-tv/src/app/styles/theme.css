@@ -65,7 +65,7 @@
 
   --am-text: #e9eef8;
   --am-dim: #96a5bd;
-  --am-faint: #6b7c95;
+  --am-faint: #7486a1;
 
   --am-accent: #58a6ff;
   --am-accent-rgb: 88 166 255;
@@ -122,30 +122,30 @@
 
   --am-text: #101828;
   --am-dim: #55637c;
-  --am-faint: #8290a8;
+  --am-faint: #606b7c;
 
-  --am-accent: #2f6bff;
-  --am-accent-rgb: 47 107 255;
-  --am-accent-2: #7c5cff;
-  --am-accent-2-rgb: 124 92 255;
-  --am-accent-soft: rgb(47 107 255 / 0.12);
+  --am-accent: #2a60e5;
+  --am-accent-rgb: 42 96 229;
+  --am-accent-2: #6d51e0;
+  --am-accent-2-rgb: 109 81 224;
+  --am-accent-soft: rgb(42 96 229 / 0.12);
 
   /* Лепестки на тон глубже: светлый розовый рядом со светлым окном
      читается выцветшим. Те же значения, что у остановок знака. */
   --am-sakura: #f2a6bf;
   --am-sakura-rgb: 242 166 191;
 
-  --am-good: #12a56b;
-  --am-warn: #b7791f;
-  --am-bad: #d94848;
+  --am-good: #0d784e;
+  --am-warn: #916018;
+  --am-bad: #bb3e3e;
 
   --am-sh-1: 0 1px 2px rgb(16 24 40 / 0.08);
   --am-sh-2: 0 18px 40px rgb(16 24 40 / 0.14);
-  --am-sh-ring: 0 0 0 1px rgb(47 107 255 / 0.4);
+  --am-sh-ring: 0 0 0 1px rgb(42 96 229 / 0.4);
 
-  --am-aurora-1: rgb(47 107 255 / 0.12);
-  --am-aurora-2: rgb(124 92 255 / 0.1);
-  --am-aurora-3: rgb(18 165 107 / 0.07);
+  --am-aurora-1: rgb(42 96 229 / 0.12);
+  --am-aurora-2: rgb(109 81 224 / 0.1);
+  --am-aurora-3: rgb(13 120 78 / 0.07);
 
   --am-bar: rgb(246 248 253 / 0.78);
   --am-scroll: #c9d4e6;

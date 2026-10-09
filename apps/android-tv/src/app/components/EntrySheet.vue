@@ -333,6 +333,7 @@ onBeforeUnmount(() => {
       :class="{ 'am-sheet--tv': lite }"
       role="dialog"
       aria-modal="true"
+      aria-label="Правка записи"
       @click.self="onDrop"
     >
       <div ref="box" class="am-sheet__box">

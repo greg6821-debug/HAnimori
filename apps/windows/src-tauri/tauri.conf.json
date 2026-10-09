@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "AniMori",
+  "productName": "HAniMori",
   "version": "../package.json",
   "identifier": "com.foulnike.animori",
   "build": {
@@ -21,9 +21,9 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/foulnike/Animori/releases/download/windows-latest/latest.json"
+        "https://github.com/ greg6821-debug/HAnimori/releases/download/windows-latest/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM3RjNFQ0Y2Mzk1RDQzREYKUldUZlExMDU5dXp6eDJ1cmZ6Z001MTRYVzBPOFZ1T2sxRlczaVBJcmNBZzd6eURmRzhSTm0xQ2cK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDdCQzdFOTJGMTk2RjNGQzAKUldUQVAyOFpMK25IZS9UNDRuYTA4bEgzR3Z6ZDJOblFWSjNDQ21HRVlQWWVmRVFJeW51TmZjcTcK",
       "windows": {
         "installMode": "passive"
       }

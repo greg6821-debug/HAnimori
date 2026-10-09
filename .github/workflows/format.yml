@@ -1,4 +1,4 @@
-name: prettier-fix
+name: 1. prettier-fix
 
 on:
   workflow_dispatch:

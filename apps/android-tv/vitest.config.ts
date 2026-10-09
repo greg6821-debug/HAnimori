@@ -1,7 +1,11 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vitest/config'
+import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
+  // SFC в тестах: P2-17 гоняет axe по настоящей разметке экрана и модалки,
+  // а не по собранному dist. Без плагина vite отказывается компилировать .vue.
+  plugins: [vue()],
   resolve: {
     alias: {
       '@/api': fileURLToPath(new URL('../../packages/core/src/api', import.meta.url)),
