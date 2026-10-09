@@ -263,23 +263,18 @@ async function openSlot(slot: number): Promise<void> {
     return
   }
 
-  // Домен: занимает свой слот, если тот свободен, и ищем по нему.
-  let origin = raw
-  try {
-    origin = new URL(raw).origin.replace(/\/+$/, '')
-  } catch {
-    try {
-      origin = new URL(`https://${raw}`).origin.replace(/\/+$/, '')
-    } catch {
-      state.trouble = 'Не похоже на адрес: нужен домен или ссылка на тайтл.'
-      return
-    }
-  }
-
   if ((state.basesText[slot] ?? '') === '') {
     state.basesText[slot] = origin
     localStorage.setItem(BASES_KEY, JSON.stringify(state.basesText))
   }
+
+  await searchDomain(slot)
+}
+
+/** Поиск по домену слота (кнопка «Найти»): файлы добавляются к общему списку. */
+async function searchDomain(slot: number): Promise<void> {
+  const base = (state.basesText[slot] ?? '').trim()
+  if (base === '' || state.busy || state.slotBusy >= 0) return
 
   state.busy = true
   state.trouble = ''
@@ -294,20 +289,15 @@ async function openSlot(slot: number): Promise<void> {
       return
     }
 
-    const useBase = state.basesText[slot] ?? origin
-    const found = await autoFindHentasis(
-      [useBase],
-      buildSearchQueries(titles),
-      titles,
-      fetchPage,
-      { year: year > 0 ? year : undefined },
-    )
+    const found = await autoFindHentasis([base], buildSearchQueries(titles), titles, fetchPage, {
+      year: year > 0 ? year : undefined,
+    })
     state.others.push(
       ...found.candidates.filter((c) => c.score > 0).map(({ url, title }) => ({ url, title })),
     )
 
     if (found.best === null) {
-      state.trouble = `На ${useBase} похожего не нашлось (страниц: ${found.pages}).`
+      state.trouble = `На ${base} похожего не нашлось (страниц: ${found.pages}).`
       return
     }
 
@@ -319,6 +309,7 @@ async function openSlot(slot: number): Promise<void> {
     state.busy = false
   }
 }
+
 
 function bindAnime(id: number): void {
   state.open = false
@@ -449,6 +440,7 @@ export const hentasis = {
   bindAnime,
   runSearch,
   openSlot,
+  searchDomain,   // ← добавить
   useCandidate,
   play,
   close,
