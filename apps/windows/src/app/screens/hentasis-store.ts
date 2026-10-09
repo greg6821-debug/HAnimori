@@ -1,7 +1,6 @@
-// Хранилище источника Hentasis (18+): три домена, автопоиск по названиям,
-// сохранённые ссылки. Одно на всё приложение: бокс в списке и списки плеера
-// читают его вместе. Файлы всех доменов сливаются в общий список:
-// группа пометки получает суффикс домена, чтобы зеркала не склеивались.
+// Хранилище источника Hentasis (18+): три слота «домен или ссылка», автопоиск
+// по названиям с AniList (только первый слот), слияние файлов всех слотов.
+// Суффикс домена в пометке не даёт группам разных зеркал склеиваться.
 
 import { computed, reactive } from 'vue'
 
@@ -23,12 +22,12 @@ import {
 import { peekRussianName, prefetchRussianNames } from '@/core/media-title'
 
 const LINKS_KEY = 'animori:hentasis-links'
+const BASES_KEY = 'animori:hentasis-bases'
 
-/** Ровно три слота: первый — основной, поиск по нему заводится сам. */
-const SLOT_COUNT = 3
+/** Домены по умолчанию: слот 1 — основной (автопоиск), слот 3 — пустой. */
+const DEFAULT_BASES = ['https://v6.hentasis.me', 'https://hentasis1.top', '']
 
 interface SavedLink {
-  /** Ссылка на страницу тайтла: по слоту, у каждого домена своя. */
   urls: (string | null)[]
   file?: number
 }
@@ -37,13 +36,13 @@ export interface HentasisState {
   animeId: number
   /** Три домена поиска. */
   basesText: string[]
-  /** Три ссылки на тайтлы (по слоту домена). */
+  /** Три ссылки на тайтлы. */
   manualUrls: string[]
   busy: boolean
-  /** Какой слот сейчас ищется/грузится: -1 — никто. */
+  /** Слот, который сейчас работает: -1 — никто. */
   slotBusy: number
   trouble: string
-  /** Нейтральное известие: не ошибка, но и не находка. */
+  /** Нейтральное известие. */
   notice: string
   matchedTitles: string[]
   matchedUrls: string[]
@@ -91,7 +90,6 @@ function say(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
-/** HTML страницы: через Rust-сторону Tauri, чтобы CORS не мешал. POST нужен поиску DLE. */
 async function fetchPage(page: string, init?: PageRequestInit): Promise<string> {
   let referer = 'https://v6.hentasis.me/'
   try {
@@ -115,14 +113,12 @@ async function fetchPage(page: string, init?: PageRequestInit): Promise<string> 
   return res.text()
 }
 
-/** Cue'и субтитра: файл тянем через plugin-http (CORS не мешает), ASS разбираем на пары. */
 async function loadSubtitleCues(
   src: string,
 ): Promise<{ start: number; end: number; text: string }[]> {
   return assToCues(await fetchPage(src))
 }
 
-/** Названия, год и метка 18+ тем же путём, что и весь плеер: карточка AniList + русское имя. */
 async function fetchTitles(
   mediaId: number,
 ): Promise<{ titles: string[]; year: number; adult: boolean }> {
@@ -148,8 +144,6 @@ function resetResult(): void {
   state.resolving = false
 }
 
-/** Метка «домен · …» для группы: зеркала нумеруют файлы каждый со своей единицы,
- * без суффикса группы разных доменов склеивались бы в один ряд. */
 function domainTag(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, '')
@@ -158,7 +152,7 @@ function domainTag(url: string): string {
   }
 }
 
-/** Номер слота по адресу страницы тайтла. */
+/** Слот по адресу: какому домену принадлежит ссылка. */
 function slotOf(url: string): number {
   for (let i = 0; i < state.basesText.length; i += 1) {
     const base = state.basesText[i]
@@ -168,6 +162,7 @@ function slotOf(url: string): number {
   return 0
 }
 
+/** Открывает страницу тайтла и ДОБАВЛЯЕТ её файлы к общему списку. */
 async function loadSlot(slot: number, url: string, remember: boolean): Promise<boolean> {
   state.slotBusy = slot
   state.trouble = ''
@@ -184,37 +179,29 @@ async function loadSlot(slot: number, url: string, remember: boolean): Promise<b
       writeLinks(map)
     }
 
-    // Слияние: файлы нового домена дописываются к общему списку.
     const tag = domainTag(url)
     const offset = state.files.length
-    for (let i = 0; i < info.files.length; i += 1) {
-      const file = info.files[i]
-      if (file === undefined) continue
+    info.files.forEach((file, i) => {
       state.files.push({
         ...file,
-        label: file.label,
         note: file.note !== undefined ? `${file.note} · ${tag}` : tag,
       })
-      // Первый файл нового домена — кандидат на автозапуск, если ещё ничего не выбрано.
       if (state.picked < 0 && i === 0) state.picked = offset
-    }
+    })
 
     return true
   } catch (e: unknown) {
-    // Слот мог не ответить — это не ошибка всего поиска: остальные едут дальше.
     Logger('WARN', `Hentasis: слот ${slot + 1} не открылся (${url})`, e)
     state.matchedTitles[slot] = ''
     state.matchedUrls[slot] = ''
-    if (state.trouble === '') {
-      state.trouble = `Домен ${slot + 1}: ${say(e)}`
-    }
+    if (state.trouble === '') state.trouble = `Домен ${slot + 1}: ${say(e)}`
     return false
   } finally {
     state.slotBusy = -1
   }
 }
 
-/** Автопоиск: только первый слот. */
+/** Автопоиск: только первый слот, только при метке 18+. */
 async function runSearch(): Promise<void> {
   if (state.animeId === 0 || state.busy) return
 
@@ -225,14 +212,14 @@ async function runSearch(): Promise<void> {
   try {
     const { titles, year, adult } = await fetchTitles(state.animeId)
     if (titles.length === 0) {
-      state.trouble = 'Не достал названия тайтла — поиск невозможен. Вставь ссылку на тайтл сам.'
+      state.trouble = 'Не достал названия тайтла — поиск невозможен. Вставь ссылку в слот 1.'
       return
     }
 
     if (!adult) {
       state.notice =
         'Метка 18+ на карточке не стоит — автопоиск не запускался. ' +
-        'Считаешь нужным — впиши ссылку в первый слот и нажми «Открыть».'
+        'Считаешь нужным — вставь ссылку и нажми «Открыть».'
       return
     }
 
@@ -250,7 +237,7 @@ async function runSearch(): Promise<void> {
     if (found.best === null) {
       state.trouble =
         `Похожего не нашлось (страниц поиска обошли: ${found.pages}). ` +
-        'Если страниц 0 — поиск сайта не отвечает: проверь первый домен или вставь ссылки руками.'
+        'Вставь ссылку в слот 1 и нажми «Открыть».'
       return
     }
 
@@ -264,40 +251,34 @@ async function runSearch(): Promise<void> {
   }
 }
 
-/** Ручной запуск слота: ссылка на тайтл открывается, домен — ищет. */
+/** Слот: ссылка на тайтл — открываем, домен — ищем по нему. */
 async function openSlot(slot: number): Promise<void> {
   const raw = (state.manualUrls[slot] ?? '').trim()
   if (raw === '' || state.busy || state.slotBusy >= 0) return
 
   if (isTitlePageUrl(raw)) {
-    resetResult()
-    const ok = await loadSlot(slot, raw, true)
-    if (ok && slot === 0) state.infoTitle = state.matchedTitles[0] ?? ''
+    state.trouble = ''
+    await loadSlot(slot, raw, true)
+    if (slot === 0) state.infoTitle = state.matchedTitles[0] ?? ''
     return
   }
 
-  // Домен: ищем на нём.
+  // Домен: занимает свой слот, если тот свободен, и ищем по нему.
   let origin = raw
   try {
-    origin = new URL(raw).origin
+    origin = new URL(raw).origin.replace(/\/+$/, '')
   } catch {
     try {
-      origin = new URL(`https://${raw}`).origin
+      origin = new URL(`https://${raw}`).origin.replace(/\/+$/, '')
     } catch {
       state.trouble = 'Не похоже на адрес: нужен домен или ссылка на тайтл.'
       return
     }
   }
 
-  const base = state.basesText[slot]
-  const emptySlots = state.basesText.filter((b) => b === undefined || b === '').length
-  if (base === undefined || base === '') {
-    // Свободный слот: домен занимает его место.
-    state.basesText[slot] = origin.replace(/\/+$/, '')
-    localStorage.setItem('animori:hentasis-bases', JSON.stringify(state.basesText))
-  } else if (emptySlots === 0 && !state.basesText.includes(origin.replace(/\/+$/, ''))) {
-    state.trouble = 'Все три слота заняты другими доменами.'
-    return
+  if ((state.basesText[slot] ?? '') === '') {
+    state.basesText[slot] = origin
+    localStorage.setItem(BASES_KEY, JSON.stringify(state.basesText))
   }
 
   state.busy = true
@@ -348,16 +329,23 @@ function bindAnime(id: number): void {
   resetResult()
   if (id === 0) return
 
-  // Домены — фикс: если в localStorage лежали старые, обновляем на дефолтные.
-  const savedBases = JSON.parse(
-    localStorage.getItem('animori:hentasis-bases') ?? '[]',
-  ) as unknown
-  const defaults = ['https://v6.hentasis.me', 'https://hentasis1.top', '']
-  state.basesText =
-    Array.isArray(savedBases) && savedBases.length === SLOT_COUNT
-      ? savedBases.map((b) => (typeof b === 'string' ? b : ''))
-      : [...defaults]
-  localStorage.setItem('animori:hentasis-bases', JSON.stringify(state.basesText))
+  // Домены: сохранённые три или дефолт (v6 первым).
+  let saved: unknown
+  try {
+    saved = JSON.parse(localStorage.getItem(BASES_KEY) ?? 'null')
+  } catch {
+    saved = null
+  }
+  if (
+    Array.isArray(saved) &&
+    saved.length === 3 &&
+    saved.every((b) => typeof b === 'string')
+  ) {
+    state.basesText = saved as string[]
+  } else {
+    state.basesText = [...DEFAULT_BASES]
+    localStorage.setItem(BASES_KEY, JSON.stringify(state.basesText))
+  }
 
   const record = readLinks()[String(id)]
   if (record === undefined || record.urls.every((u) => u === null || u === '')) {
@@ -365,16 +353,16 @@ function bindAnime(id: number): void {
     return
   }
 
-  // Восстановление: грузим все сохранённые ссылки параллельно.
-  state.manualUrls = [...record.urls]
+  // Восстановление: все сохранённые ссылки грузим параллельно.
+  state.manualUrls = record.urls.map((u) => u ?? '')
   const jobs = record.urls
     .map((url, slot) => ({ url, slot }))
-    .filter((job): job is { url: string; slot: number } => typeof job.url === 'string' && job.url !== '')
+    .filter((job): job is { url: string; slot: number } => job.url !== null && job.url !== '')
     .map((job) => loadSlot(job.slot, job.url, false))
 
   void Promise.allSettled(jobs).then(() => {
     if (state.trouble !== '') {
-      state.trouble = `Часть доменов не открылась (${state.trouble}). Попробуй «Найти» заново.`
+      state.trouble = `Часть доменов не открылась (${state.trouble}). Нажми «Открыть» заново.`
     }
   })
 }
@@ -429,27 +417,31 @@ function close(): void {
   state.open = false
 }
 
-function forgetSlot(slot: number): void {
-  const map = readLinks()
-  const record = map[String(state.animeId)]
-  if (record !== undefined) {
-    record.urls[slot] = null
-    writeLinks(map)
-  }
-  state.manualUrls[slot] = ''
-  state.matchedTitles[slot] = ''
-  state.matchedUrls[slot] = ''
-}
-
 function forget(): void {
   const map = readLinks()
   delete map[String(state.animeId)]
   writeLinks(map)
   state.manualUrls = ['', '', '']
-  state.matchedTitles = ['', '', '']
-  state.matchedUrls = ['', '', '']
   void runSearch()
 }
+
+/** Группы файлов по пометке: PlayerScreen читает их как «озвучки». */
+const groups = computed(() => {
+  const byNote = new Map<
+    string,
+    { key: string; label: string; items: { index: number; file: HentasisFile }[] }
+  >()
+
+  state.files.forEach((file, index) => {
+    const note = file.note ?? ''
+    const key = note === '' ? `\u0000${index}` : note
+    const found = byNote.get(key)
+    if (found !== undefined) found.items.push({ index, file })
+    else byNote.set(key, { key, label: note === '' ? 'Hentasis' : note, items: [{ index, file }] })
+  })
+
+  return [...byNote.values()]
+})
 
 export const hentasis = {
   state,
@@ -461,8 +453,5 @@ export const hentasis = {
   play,
   close,
   forget,
-  forgetSlot,
   loadSubtitleCues,
 }
-
-
