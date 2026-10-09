@@ -617,8 +617,9 @@ function assTime(raw: string): number | null {
   return h * 3600 + min * 60 + s + ms / 1000
 }
 
-/** Dialogue-строки ASS → cue'и. Начертания, позиции и эффекты теряются:
- * тексту перевода достаточно времени и содержимого. */
+/** Dialogue-строки ASS → cue'и. Начертания, позиции и эффекты теряются.
+ * Спозиционированные события (\pos/\move) — вотермарки и счётчики студий:
+ * без координат они только мусор, выкидываем. */
 export function assToCues(source: string): { start: number; end: number; text: string }[] {
   const out: { start: number; end: number; text: string }[] = []
 
@@ -630,13 +631,20 @@ export function assToCues(source: string): { start: number; end: number; text: s
     const end = assTime(parts[2] ?? '')
     if (start === null || end === null || end <= start) continue
 
-    const text = parts
-      .slice(9)
-      .join(',')
+    const raw = parts.slice(9).join(',')
+
+    // Вотермарки/заставки: позиционированы на кадре — как обычная строка бессмысленны.
+    if (/\\(?:pos|move)\(/i.test(raw)) continue
+
+    const text = raw
       .replace(/\{[^}]*\}/g, '') // теги-оверрайды {\i1} и прочие
       .replace(/\\N|\\n/g, '\n')
+      .replace(/<[^>]+>/g, '')
       .trim()
     if (text === '') continue
+
+    // Остатки счётчиков: строка только из цифр, знаков времени и разделителей.
+    if (/^[\d\s.,:;[\]()|/-]+$/.test(text)) continue
 
     out.push({ start, end, text })
   }
