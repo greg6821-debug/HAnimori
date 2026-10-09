@@ -685,8 +685,6 @@ function pauseMainVideo(): void {
 
 /** Файл Hentasis играет в общем теге: ключ места — spotKey с меткой 'hx',
  * поэтому «продолжить с…» и история работают без отдельных механизмов. */
-/** Файл Hentasis играет в общем теге: ключ места — spotKey с меткой 'hx',
- * поэтому «продолжить с…» и история работают без отдельных механизмов. */
 function startHentasis(): void {
   const file = hentasis.state.files[hentasis.state.picked]
   const el = videoEl.value
