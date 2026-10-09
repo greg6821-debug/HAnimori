@@ -684,7 +684,7 @@ export async function resolveHentasisDirect(
     for (const candidate of extractVideoTagSources(html, url)) {
       const kind = classify(candidate)
       if (kind === 'mp4' || kind === 'hls') {
-        return { url: candidate, kind, hops: [...visited] }
+        return { url: candidate, kind, hops: [...visited], subtitles: subs }
       }
     }
 
@@ -694,7 +694,7 @@ export async function resolveHentasisDirect(
       for (const file of config.files) {
         const kind = classify(file.url)
         if (kind === 'mp4' || kind === 'hls') {
-          return { url: file.url, kind, hops: [...visited] }
+          return { url: file.url, kind, hops: [...visited], subtitles: subs }
         }
         if (kind === 'iframe' && file.url !== iframeUrl && frame === undefined) {
           frame = file.url
@@ -706,13 +706,13 @@ export async function resolveHentasisDirect(
     for (const candidate of extractMediaUrls(html)) {
       const kind = classify(candidate)
       if (kind === 'mp4' || kind === 'hls') {
-        return { url: candidate, kind, hops: [...visited] }
+        return { url: candidate, kind, hops: [...visited], subtitles: subs }
       }
     }
 
     for (const candidate of manifestCandidates(html)) {
       if (await looksLikeManifest(candidate, fetchPage)) {
-        return { url: candidate, kind: 'hls', hops: [...visited] }
+        return { url: candidate, kind: 'hls', hops: [...visited], subtitles: subs }
       }
     }
 
