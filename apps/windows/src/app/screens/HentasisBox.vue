@@ -15,7 +15,9 @@ const state = hentasis.state
 /** Файлы в боксе спрятаны за переключателем: основной путь — списки плеера
  * («Озвучка»/«Серии»), здесь они остаются запасным доступом. */
 const showFiles = ref(false)
-
+/** Настройки поиска (домены и заголовки) спрятаны за переключателем: нужны редко,
+ * а места в боксе занимают заметно. */
+const showSettings = ref(false)
 /** Наружу через оболочку — тем же путём, что ссылки описания на карточке:
  * в WebView2 новый таргет молча отбрасывается, а переход в том же окне унёс бы приложение. */
 async function openSite(): Promise<void> {
@@ -73,20 +75,44 @@ const groups = computed<FileGroup[]>(() => {
 
 <template>
   <div class="am-hx">
-    <label class="am-hx__field">
-      <span class="am-hx__cap">Домены для поиска (через запятую)</span>
-      <input
-        v-model="state.basesText"
-        class="am-hx__url"
-        type="text"
-        spellcheck="false"
-        autocomplete="off"
-        placeholder="https://hentasis1.top"
-        aria-label="Домены Hentasis"
-        @keydown.stop
-        @change="hentasis.setBases(state.basesText)"
-      />
-    </label>
+    <button class="am-hx__file" type="button" @click="showSettings = !showSettings">
+      {{ showSettings ? 'Скрыть настройки поиска' : 'Настройки поиска' }}
+    </button>
+
+    <template v-if="showSettings">
+      <label class="am-hx__field">
+        <span class="am-hx__cap">Домены для поиска (через запятую)</span>
+        <input
+          v-model="state.basesText"
+          class="am-hx__url"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="https://hentasis1.top"
+          aria-label="Домены Hentasis"
+          @keydown.stop
+          @change="hentasis.setBases(state.basesText)"
+        />
+      </label>
+
+      <label class="am-hx__field">
+        <span class="am-hx__cap">Заголовки запроса (Имя: значение, по одному в строке)</span>
+        <textarea
+          v-model="state.headersText"
+          class="am-hx__url am-hx__headers"
+          rows="4"
+          spellcheck="false"
+          autocomplete="off"
+          aria-label="Заголовки запроса"
+          @keydown.stop
+          @change="hentasis.setHeaders(state.headersText)"
+        ></textarea>
+      </label>
+
+      <button class="am-hx__file" type="button" @click="hentasis.resetSettings()">
+        Вернуть по умолчанию
+      </button>
+    </template>
 
     <div class="am-hx__row">
       <button
@@ -336,5 +362,13 @@ const groups = computed<FileGroup[]>(() => {
 
 .am-hx__link:hover {
   text-decoration: underline;
+}
+
+.am-hx__headers {
+  min-height: 72px;
+  resize: vertical;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
 }
 </style>
