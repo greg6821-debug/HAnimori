@@ -4,7 +4,7 @@
 // сайт взрослый, остальным — кнопка «Искать по названию».
 
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
-
+import { Logger } from '@/utils/logger'
 import { fetchMediaCard } from '@/api/anilist-media'
 import {
   autoFindHentasis,
@@ -154,8 +154,11 @@ async function fetchPage(page: string, init?: PageRequestInit): Promise<string> 
     method: init?.method ?? 'GET',
     headers,
     body: init?.body,
+    // Страница может молча держать соединение: без таймаута «Открываю файл…» висит вечно.
+    signal: AbortSignal.timeout(20_000),
   })
-  if (!res.ok) throw new Error(`Сайт ответил HTTP ${res.status}`)
+  if (!res.ok) throw new Error(`Сайт ответил HTTP ${res.status} (${page})`)
+
   return res.text()
 }
 
@@ -411,12 +414,12 @@ async function play(index: number): Promise<void> {
     state.trouble = ''
     try {
       const direct = await resolveHentasisDirect(file.url, fetchPage)
-      if (direct === null) {
-        state.trouble =
-          'Файл закрыт защитой сайта и прямой ссылки не нашлось. Открой страницу в браузере.'
-        return
-      }
+      Logger('INFO', `Hentasis: файл разыменован (${direct.kind}) → ${direct.url}`)
       state.files[index] = { ...file, url: direct.url, kind: direct.kind }
+    } catch (e) {
+      state.trouble = say(e)
+      Logger('WARN', 'Hentasis: разыменование не удалось', e)
+      return
     } finally {
       state.resolving = false
     }
