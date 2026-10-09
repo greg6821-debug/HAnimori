@@ -313,10 +313,15 @@ function extractConfigs(html: string, pageUrl: string): RawConfig[] {
   // Фолбэк 2: прямые ссылки, затем iframe
   const files: RawFile[] = []
 
-  const mediaRe = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8|m4v|webm)(?:\?[^\s"'`<>\\]*)?/gi
-  let media: RegExpExecArray | null
-  while ((media = mediaRe.exec(html)) !== null) {
-    pushUrl(media[0], undefined, pageUrl, files, seen)
+  // Фолбэк 2: теги video/source, затем полные адреса файлов, затем iframe
+  const files: RawFile[] = []
+
+  for (const url of extractVideoTagSources(html, pageUrl)) {
+    pushUrl(url, undefined, pageUrl, files, seen)
+  }
+
+  for (const url of extractMediaUrls(html)) {
+    pushUrl(url, undefined, pageUrl, files, seen)
   }
 
   if (files.length === 0) {
@@ -547,6 +552,23 @@ function extractVideoTagSources(html: string, pageUrl: string): string[] {
   return out
 }
 
+/** Полные адреса со страницы, отфильтрованные по расширению В КОНЦЕ пути.
+ * Прежний ленивый регэксп обрезал URL на первом «.mp4» внутри пути:
+ * «…/01_raw_720.mp4/index-v1-a1.m3u8?token=…» превращался в «…/01_raw_720.mp4» — 404. */
+function extractMediaUrls(html: string): string[] {
+  const out: string[] = []
+  const re = /(?:https?:)?\/\/[^\s"'`<>\\]+/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html)) !== null) {
+    const url = clean(m[0] ?? '')
+    if (!/^https?:\/\//i.test(url)) continue
+    const path = (url.split(/[?#]/)[0] ?? '').toLowerCase()
+    if (/\.(mp4|m3u8|m4v|webm)$/.test(path)) out.push(url)
+  }
+  return out
+}
+
+
 /** Кандидаты манифеста из соседних ассетов: спрайт превью и субтитры лежат рядом
  * с файлом и отличаются только суффиксом (01_raw_sprite.jpg → 01_raw.m3u8). */
 function manifestCandidates(html: string): string[] {
@@ -599,6 +621,15 @@ export async function resolveHentasisDirect(
       throw new Error(`Страница плеера не отдалась (${url}): ${why}`, { cause: e })
     }
 
+        // 1) Теги video/source — самый надёжный след манифеста на странице плеера.
+    for (const candidate of extractVideoTagSources(html, url)) {
+      const kind = classify(candidate)
+      if (kind === 'mp4' || kind === 'hls') {
+        return { url: candidate, kind, hops: [...visited] }
+      }
+    }
+
+    // 2) Конфиги плеера: прямой файл возвращаем, iframe — следующий шаг цепочки.
     let frame: string | undefined
     for (const config of extractConfigs(html, url)) {
       for (const file of config.files) {
@@ -612,12 +643,6 @@ export async function resolveHentasisDirect(
       }
     }
 
-    for (const candidate of extractVideoTagSources(html, url)) {
-      const kind = classify(candidate)
-      if (kind === 'mp4' || kind === 'hls') {
-        return { url: candidate, kind, hops: [...visited] }
-      }
-    }
 
     const found = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8)(?:\?[^\s"'`<>\\]*)?/i.exec(html)
     if (found !== null) {
