@@ -74,9 +74,35 @@ const state = reactive<HentasisState>({
   others: [],
 })
 
+/** Записи в localStorage бывают двух поколений: { url, file } и { urls: […], file }.
+ * Приводим к одному виду — массив из трёх слотов, лишние игнорируются. */
+function normalizeRecord(raw: unknown): SavedLink {
+  const record = (raw ?? {}) as Partial<SavedLink> & { url?: string | null }
+
+  let urls: (string | null)[] = [null, null, null]
+  if (Array.isArray(record.urls)) {
+    for (let i = 0; i < 3; i += 1) {
+      const value = record.urls[i]
+      urls[i] = typeof value === 'string' && value !== '' ? value : null
+    }
+  } else if (typeof record.url === 'string' && record.url !== '') {
+    // Старый формат: одна ссылка — это слот 0.
+    urls[0] = record.url
+  }
+
+  return { urls, file: typeof record.file === 'number' ? record.file : undefined }
+}
+
 function readLinks(): Record<string, SavedLink> {
   try {
-    return JSON.parse(localStorage.getItem(LINKS_KEY) ?? '{}') as Record<string, SavedLink>
+    const parsed = JSON.parse(localStorage.getItem(LINKS_KEY) ?? '{}') as unknown
+    if (parsed === null || typeof parsed !== 'object') return {}
+
+    const out: Record<string, SavedLink> = {}
+    for (const [key, value] of Object.entries(parsed)) {
+      out[key] = normalizeRecord(value)
+    }
+    return out
   } catch {
     return {}
   }
@@ -175,17 +201,14 @@ async function loadSlot(slot: number, url: string, remember: boolean): Promise<b
     if (remember) {
       const map = readLinks()
       const record = map[String(state.animeId)] ?? { urls: [null, null, null] }
-      record.urls.splice(slot, 1, url)
+      record.urls[slot] = url
       writeLinks(map)
     }
 
     const tag = domainTag(url)
     const offset = state.files.length
     info.files.forEach((file, i) => {
-      state.files.push({
-        ...file,
-        note: file.note !== undefined ? `${file.note} · ${tag}` : tag,
-      })
+      state.files.push({ ...file })
       if (state.picked < 0 && i === 0) state.picked = offset
     })
 
@@ -413,7 +436,8 @@ function forget(): void {
   void runSearch()
 }
 
-/** Группы файлов по пометке: PlayerScreen читает их как «озвучки». */
+/** Группы файлов по пометке; домен файла — в ключ, но не в подпись:
+ * одинаковые озвучки разных зеркал не склеиваются, а видит человек чистую метку. */
 const groups = computed(() => {
   const byNote = new Map<
     string,
@@ -422,7 +446,14 @@ const groups = computed(() => {
 
   state.files.forEach((file, index) => {
     const note = file.note ?? ''
-    const key = note === '' ? `\u0000${index}` : note
+    const domain = (() => {
+      try {
+        return new URL(file.url).hostname
+      } catch {
+        return file.url
+      }
+    })()
+    const key = note === '' ? `\u0000${index}` : `${note}@@${domain}`
     const found = byNote.get(key)
     if (found !== undefined) found.items.push({ index, file })
     else byNote.set(key, { key, label: note === '' ? 'Hentasis' : note, items: [{ index, file }] })
