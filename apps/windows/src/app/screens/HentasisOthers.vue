@@ -22,7 +22,7 @@ const showWall = computed(
         v-for="other in list"
         :key="other.url"
         class="am-hxo__card"
-        :class="{ 'am-hxo__card--on': other.url === state.matchedUrl }"
+        :class="{ 'am-hxo__card--on': other.url === state.matchedUrls[0] }"
         type="button"
         :disabled="state.busy"
         @click="hentasis.useCandidate(other.url)"
