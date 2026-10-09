@@ -534,6 +534,42 @@ export async function getHentasisInfo(
   }
 }
 
+
+/** Разыменование iframe-файла (video.php на зеркалах): тянем страницу плеера
+ * с правильным Referer и достаём прямую ссылку. Без своего Referer такие страницы
+ * отдают заглушку «содержимое заблокировано». */
+export async function resolveHentasisDirect(
+  iframeUrl: string,
+  fetchPage: PageFetcher,
+): Promise<{ url: string; kind: HentasisFileKind } | null> {
+  let html = '';
+  try {
+    html = await fetchPage(iframeUrl);
+  } catch {
+    return null;
+  }
+
+  // Конфиги плеера на странице video.php (Playerjs/RalodePlayer), затем прямые ссылки.
+  for (const config of extractConfigs(html, iframeUrl)) {
+    for (const file of config.files) {
+      const kind = classify(file.url);
+      if (kind === 'mp4' || kind === 'hls') {
+        return { url: file.url, kind };
+      }
+    }
+  }
+
+  const found = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8)(?:\?[^\s"'`<>\\]*)?/i.exec(html);
+  if (found !== null) {
+    const url = absolutize(found[0] ?? '', iframeUrl);
+    if (url !== '') return { url, kind: classify(url) };
+  }
+
+  return null;
+}
+
+
+
 /* ---------- Поиск тайтла по названиям ---------- */
 
 export function normalizeTitle(raw: string): string {
