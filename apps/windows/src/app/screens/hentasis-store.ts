@@ -45,6 +45,14 @@ const LINKS_KEY = 'animori:hentasis-links'
 const BASES_KEY = 'animori:hentasis-bases'
 const DEFAULT_BASES = ['https://hentasis1.top']
 
+const HEADERS_KEY = 'animori:hentasis-headers'
+
+/** Заголовки по умолчанию: то, что раньше было захардкожено в fetchPage. */
+const DEFAULT_HEADERS_TEXT = [
+  'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept-Language: ru,en;q=0.8',
+].join('\n')
+
 interface SavedLink {
   url: string
   file?: number
@@ -67,6 +75,7 @@ export interface HentasisState {
   picked: number
   open: boolean
   resolving: boolean
+  headersText: string
   others: { url: string; title: string }[]
 }
 
@@ -86,6 +95,7 @@ const state = reactive<HentasisState>({
   picked: -1,
   open: false,
   others: [],
+  headersText: '',
   resolving: false,
 })
 
@@ -121,8 +131,6 @@ function say(e: unknown): string {
 /** HTML страницы: через Rust-сторону Tauri, чтобы CORS не мешал. POST нужен поиску DLE. */
 async function fetchPage(page: string, init?: PageRequestInit): Promise<string> {
   let referer = 'https://hentasis1.top/'
-  headers['User-Agent'] =
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
   try {
     referer = new URL(page).origin + '/'
   } catch {
@@ -132,17 +140,15 @@ async function fetchPage(page: string, init?: PageRequestInit): Promise<string> 
   const headers: Record<string, string> = {
     Referer: referer,
     'Accept-Language': 'ru,en;q=0.8',
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    // Свои заголовки поверх дефолтных: можно переопределить всё, включая Referer,
+    // и добавить Cookie (например, после закрытия шторки на зеркале).
+    ...parseHeaders(state.headersText),
   }
-  if (init?.body !== undefined) headers['Content-Type'] = 'application/x-www-form-urlencoded'
-
-  const res = await tauriFetch(page, {
-    method: init?.method ?? 'GET',
-    headers,
-    body: init?.body,
-  })
-  if (!res.ok) throw new Error(`Сайт ответил HTTP ${res.status}`)
-  return res.text()
-}
+  if (init?.body !== undefined && headers['Content-Type'] === undefined) {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded'
+  }
 
 /** Названия, год и метка 18+ тем же путём, что и весь плеер: карточка AniList + русское имя. */
 async function fetchTitles(
@@ -260,6 +266,7 @@ function bindAnime(id: number): void {
 
   state.animeId = id
   state.basesText = readBases().join(', ')
+  state.headersText = readHeadersText()
   state.manualUrl = ''
   resetResult()
   if (id === 0) return
@@ -290,6 +297,43 @@ function setBases(text: string): void {
     .filter((part) => /^https?:\/\//i.test(part))
   localStorage.setItem(BASES_KEY, JSON.stringify(bases.length > 0 ? bases : [...DEFAULT_BASES]))
 }
+
+
+function readHeadersText(): string {
+  const raw = localStorage.getItem(HEADERS_KEY)
+  return raw === null || raw.trim() === '' ? DEFAULT_HEADERS_TEXT : raw
+}
+
+/** «Имя: значение» построчно → словарь. Мусорные строки пропускаются. */
+function parseHeaders(text: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim()
+    if (line === '') continue
+    const at = line.indexOf(':')
+    if (at <= 0) continue
+    const name = line.slice(0, at).trim()
+    const value = line.slice(at + 1).trim()
+    if (!/^[A-Za-z0-9-]+$/.test(name) || value === '') continue
+    out[name] = value
+  }
+  return out
+}
+
+function setHeaders(text: string): void {
+  state.headersText = text
+  localStorage.setItem(HEADERS_KEY, text)
+}
+
+/** Обе настройки — к заводским: домены и заголовки. */
+function resetSettings(): void {
+  state.basesText = [...DEFAULT_BASES].join(', ')
+  localStorage.setItem(BASES_KEY, JSON.stringify([...DEFAULT_BASES]))
+
+  state.headersText = DEFAULT_HEADERS_TEXT
+  localStorage.setItem(HEADERS_KEY, DEFAULT_HEADERS_TEXT)
+}
+
 
 /** Домен из сырой строки; без схемы пробуем https:// сами. Пусто — не адрес вовсе. */
 function originOf(raw: string): string {
@@ -355,12 +399,8 @@ async function play(index: number): Promise<void> {
   // Страницы-плееры зеркал (video.php) в iframe отдают блокировку: чужой Referer.
   // Разыменовываем в прямую ссылку и играем родным тегом; результат кешируется в files.
   if (file.kind === 'iframe' && file.url.includes('video.php')) {
-    if (/^(mp4|hls)$/.test(file.kind)) {
-      state.open = true
-      return
-    }
-
     state.resolving = true
+    state.trouble = ''          // заодно гасим старую ошибку перед новой попыткой
     try {
       const direct = await resolveHentasisDirect(file.url, fetchPage)
       if (direct === null) {
@@ -395,6 +435,8 @@ export const hentasis = {
   groups,
   bindAnime,
   setBases,
+  setHeaders,
+  resetSettings,
   runSearch,
   useManual,
   useCandidate,
