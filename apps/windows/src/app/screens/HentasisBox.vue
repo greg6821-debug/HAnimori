@@ -7,18 +7,22 @@ import type { HentasisFile } from '@/api/hentasis'
 
 import { hentasis } from './hentasis-store'
 
-import { openUrl } from '@tauri-apps/plugin-opener'
+import { Bridge } from '@/bridge'
 
+
+/** Наружу через оболочку — тем же путём, что ссылки описания на карточке:
+ * в WebView2 новый таргет молча отбрасывается, а переход в том же окне унёс бы приложение. */
 async function openSite(): Promise<void> {
   const url = state.matchedUrl
   if (url === '') return
+
   try {
-    await openUrl(url)
+    await Bridge.shell.openExternal(url)
   } catch (e: unknown) {
     state.trouble = `Браузер не открылся: ${e instanceof Error ? e.message : String(e)}`
   }
 }
-
+  
   
 const props = defineProps<{ animeId: number }>()
 
