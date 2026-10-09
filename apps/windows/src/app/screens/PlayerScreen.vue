@@ -1284,7 +1284,11 @@ watch(wide, (on) => {
 // закрытие возвращает kodik-поток к его месту.
 watch(
   () =>
-    [hentasis.state.open, hentasis.state.picked, hentasis.state.files[hentasis.state.picked]?.url ?? ''] as const,
+    [
+      hentasis.state.open,
+      hentasis.state.picked,
+      hentasis.state.files[hentasis.state.picked]?.url ?? '',
+    ] as const,
   ([open], [wasOpen]) => {
     if (open) {
       const file = hentasis.state.files[hentasis.state.picked]
