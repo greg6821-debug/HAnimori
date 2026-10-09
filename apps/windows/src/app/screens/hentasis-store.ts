@@ -169,8 +169,6 @@ function resetResult(): void {
   state.resolving = false
 }
 
-
-
 /** Слот по адресу: какому домену принадлежит ссылка. */
 function slotOf(url: string): number {
   for (let i = 0; i < state.basesText.length; i += 1) {
