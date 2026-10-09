@@ -111,6 +111,7 @@ const groups = computed<FileGroup[]>(() => {
     <p v-if="state.busy && state.phase === 'search'" class="am-hx__note" role="status">
       Ищу тайтл по названиям с AniList…
     </p>
+    <p v-if="state.resolving" class="am-hx__note" role="status">Открываю файл…</p>
     <p v-else-if="state.busy" class="am-hx__note" role="status">Читаю страницу…</p>
     <p v-else-if="state.trouble !== ''" class="am-hx__note am-hx__note--err" role="alert">
       {{ state.trouble }}
