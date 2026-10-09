@@ -303,9 +303,25 @@ let hxSubsBusy = false
 async function attachHxSubtitles(): Promise<void> {
   if (hxSubsBusy) return
   hxSubsBusy = true
+
   try {
     clearHxSubtitles()
-    // …тело функции без изменений…
+
+    const subs = hentasis.state.subtitles
+    const el = videoEl.value
+    if (el === null || subs.length === 0) return
+
+    const preferred = subs.find((s) => /рус|russ/i.test(s.label)) ?? subs[0]
+    if (preferred === undefined) return
+
+    const cues = await hentasis.loadSubtitleCues(preferred.src)
+    const track = el.addTextTrack('subtitles', preferred.label, 'ru')
+    track.mode = 'showing'
+    for (const cue of cues) track.addCue(new VTTCue(cue.start, cue.end, cue.text))
+    hxSubTracks.push(track)
+    Logger('INFO', `Плеер: субтитры Hentasis показываются (${preferred.label}, ${cues.length})`)
+  } catch (e: unknown) {
+    Logger('WARN', 'Плеер: субтитры Hentasis не добрались', e)
   } finally {
     hxSubsBusy = false
   }
@@ -383,9 +399,15 @@ const coverStyle = computed<{ backgroundImage: string }>(() => ({
   backgroundImage: cover.value === null ? 'none' : `url("${cover.value}")`,
 }))
 
-/** Заслонка нужна, пока кадра нет: чёрный прямоугольник ничего не говорит. */
-const veil = computed<boolean>(() =>
-  hentasis.state.open ? false : busy.value || trouble.value !== '' || stream.value === null,
+/** Заслонка нужна, пока кадра нет; при открытом Hentasis и на hx-тайтлах
+ * (выбор лежит на источнике 18+) kodik-ошибки заслонкой не показываем. */
+const veil = computed<boolean>(() => {
+  if (hxTouched.value) return false
+  return busy.value || trouble.value !== '' || stream.value === null
+})
+/** Тайтл, где человек уже смотрел/выбирал Hentasis: его kodik-ошибки — не заслонка. */
+const hxTouched = computed<boolean>(
+  () => hentasis.state.open || hentasis.state.picked >= 0 || hentasis.state.matchedUrl !== '',
 )
 /** Что написано на заслонке: случаев без ссылки три, и путать их нельзя — при смене озвучки
  * серия выбрана и ждёт ссылки, а «Серия не выбрана» читалось как сброс выбора. */
