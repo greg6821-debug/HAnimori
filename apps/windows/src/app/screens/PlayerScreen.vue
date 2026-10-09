@@ -281,16 +281,22 @@ let spot = ''
 /** Восстановление hx-выбора из истории: ждём, пока файлы догрузятся. */
 let hxResume: { gi: number; ep: number } | null = null
 
+/** Восстановление hx-выбора: играем, как только группы на месте; если они уже
+ * загружены — срабатывает сразу, без ожидания. */
+function tryHxResume(): void {
+  if (hxResume === null) return
+  const group = hxGroups.value[hxResume.gi]
+  const item = group?.items[hxResume.ep - 1]
+  if (group === undefined || item === undefined) return
+  hxVoice.value = hxResume.gi
+  hentasis.play(item.index)
+  hxResume = null
+}
+
 watch(
   () => hxGroups.value.length,
   () => {
-    if (hxResume === null) return
-    const group = hxGroups.value[hxResume.gi]
-    const item = group?.items[hxResume.ep - 1]
-    if (group === undefined || item === undefined) return
-    hxVoice.value = hxResume.gi
-    hentasis.play(item.index)
-    hxResume = null
+    tryHxResume()
   },
 )
 
@@ -1203,9 +1209,12 @@ onMounted(() => {
   // Метки нужны и полке серий, и первому кадру: просим их пораньше.
   void whenWatchReady().then(() => {
     const seen = peekPick(mediaId.value)
-    if (seen !== null && seen.voiceKey.startsWith('hx:')) {
-      hxResume = { gi: Number(seen.voiceKey.slice(3)), ep: seen.episode }
-    }
+    if (seen === null || !seen.voiceKey.startsWith('hx:')) return
+
+    hxResume = { gi: Number(seen.voiceKey.slice(3)), ep: seen.episode }
+    // Файлы могли уже лежать в сторе с прошлого захода: длины групп не меняются,
+    // наблюдатель не сработает — пробуем восстановиться сразу.
+    tryHxResume()
   })
   void load()
 })
