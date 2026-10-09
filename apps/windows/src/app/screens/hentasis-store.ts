@@ -453,6 +453,7 @@ function forget(): void {
 
 export const hentasis = {
   state,
+  groups,
   bindAnime,
   runSearch,
   openSlot,
@@ -464,25 +465,4 @@ export const hentasis = {
   loadSubtitleCues,
 }
 
-// Группы вынесены сюда, чтобы PlayerScreen продолжал читать hentasis.groups без изменений.
-const groups = computed(() => {
-  const byNote = new Map<string, { key: string; label: string; items: { index: number; file: HentasisFile }[] }>()
 
-  state.files.forEach((file, index) => {
-    const note = file.note ?? ''
-    const key = note === '' ? `\u0000${index}` : note
-    const found = byNote.get(key)
-    if (found !== undefined) found.items.push({ index, file })
-    else byNote.set(key, { key, label: note === '' ? 'Hentasis' : note, items: [{ index, file }] })
-  })
-
-  return [...byNote.values()]
-})
-
-// attachAnime вызывается из HentasisBox.vue: имя оставлено для совместимости.
-export function bindAnimeSlot(id: number): void {
-  bindAnime(id)
-}
-
-// Реэкспорт groups: PlayerScreen.vue читает hentasis.groups.
-export const hentasisGroups = groups
