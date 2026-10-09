@@ -7,6 +7,11 @@
 
 export type HentasisFileKind = 'mp4' | 'hls' | 'iframe'
 
+export interface HentasisSubtitle {
+  label: string
+  src: string
+}
+
 export interface HentasisFile {
   label: string
   url: string
@@ -536,6 +541,23 @@ export async function getHentasisInfo(
   }
 }
 
+
+/** Дорожки субтитров из конфига плеера страницы: {"label":"Russian","src":"…01_raw_rus.ass"}. */
+function extractSubtitleTracks(html: string, pageUrl: string): HentasisSubtitle[] {
+  const out: HentasisSubtitle[] = []
+  const re = /\{\s*"label"\s*:\s*"([^"]+)"\s*,\s*"src"\s*:\s*"([^"]+)"[^}]*\}/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html)) !== null) {
+    const label = clean(m[1] ?? '')
+    const src = absolutize(m[2] ?? '', pageUrl)
+    if (label === '' || src === '') continue
+    if (!/\.ass(\?|$)/i.test(src)) continue
+    if (out.some((s) => s.src === src)) continue
+    out.push({ label, src })
+  }
+  return out
+}
+
 /** Источники из тегов video/source и data-атрибутов: в сыром HTML плеера
  * манифест живёт обычно здесь. */
 function extractVideoTagSources(html: string, pageUrl: string): string[] {
@@ -586,11 +608,52 @@ async function looksLikeManifest(url: string, fetchPage: PageFetcher): Promise<b
   }
 }
 
+
+function assTime(raw: string): number | null {
+  const m = /(\d+):(\d{1,2}):(\d{1,2})[.,](\d{1,3})/.exec(raw.trim())
+  if (m === null) return null
+  const h = Number(m[1] ?? 0)
+  const min = Number(m[2] ?? 0)
+  const s = Number(m[3] ?? 0)
+  const ms = Number((m[4] ?? '0').padEnd(3, '0'))
+  return h * 3600 + min * 60 + s + ms / 1000
+}
+
+/** Dialogue-строки ASS → cue'и. Начертания, позиции и эффекты теряются:
+ * тексту перевода достаточно времени и содержимого. */
+export function assToCues(source: string): { start: number; end: number; text: string }[] {
+  const out: { start: number; end: number; text: string }[] = []
+
+  for (const line of source.split('\n')) {
+    if (!line.startsWith('Dialogue:')) continue
+    // Dialogue: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
+    const parts = line.slice(9).split(',')
+    const start = assTime(parts[1] ?? '')
+    const end = assTime(parts[2] ?? '')
+    if (start === null || end === null || end <= start) continue
+
+    const text = parts
+      .slice(9)
+      .join(',')
+      .replace(/\{[^}]*\}/g, '') // теги-оверрайды {\i1} и прочие
+      .replace(/\\N|\\n/g, '\n')
+      .trim()
+    if (text === '') continue
+
+    out.push({ start, end, text })
+  }
+
+  return out
+}
+
+
 export interface HentasisDirect {
   url: string
   kind: HentasisFileKind
   /** Цепочка страниц, по которой дошли до файла: для диагностики обрывов. */
   hops: string[]
+  /** Субтитры со страницы плеера, где нашёлся файл. */
+  subtitles: HentasisSubtitle[]
 }
 
 /** Разыменование iframe-файла: цепочка страниц-плееров до прямой ссылки.
@@ -616,7 +679,7 @@ export async function resolveHentasisDirect(
       const why = e instanceof Error ? e.message : String(e)
       throw new Error(`Страница плеера не отдалась (${url}): ${why}`, { cause: e })
     }
-
+    const subs = extractSubtitleTracks(html, url)
     // 1) Теги video/source — самый надёжный след манифеста на странице плеера.
     for (const candidate of extractVideoTagSources(html, url)) {
       const kind = classify(candidate)
