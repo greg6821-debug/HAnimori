@@ -1226,7 +1226,7 @@ watch(
       hentasis.state.picked,
       hentasis.state.files[hentasis.state.picked]?.url ?? '',
     ] as const,
-  ([open, , url], [wasOpen, , wasUrl]) => {
+  ([open], [wasOpen]) => {
     if (open) {
       const file = hentasis.state.files[hentasis.state.picked]
       if (file !== undefined && file.kind !== 'iframe') {
@@ -1283,15 +1283,24 @@ watch(wide, (on) => {
 // Hentasis: видео-файл встаёт в общий тег, iframe — слоем поверх (главный на паузе);
 // закрытие возвращает kodik-поток к его месту.
 watch(
-  () => [hentasis.state.open, hentasis.state.picked] as const,
+  () =>
+    [hentasis.state.open, hentasis.state.picked, hentasis.state.files[hentasis.state.picked]?.url ?? ''] as const,
   ([open], [wasOpen]) => {
     if (open) {
       const file = hentasis.state.files[hentasis.state.picked]
-      if (file !== undefined && file.kind !== 'iframe') startHentasis()
-      else pauseMainVideo()
+      if (file !== undefined && file.kind !== 'iframe') {
+        const addr = hxAddress()
+        if (addr !== null) hxVoice.value = addr.group
+        startHentasis()
+      } else {
+        pauseMainVideo()
+      }
       return
     }
-    if (wasOpen) resumeKodik()
+    if (wasOpen) {
+      hxVoice.value = -1
+      resumeKodik()
+    }
   },
 )
 
