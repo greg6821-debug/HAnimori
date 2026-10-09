@@ -49,6 +49,8 @@ import {
   splitSpot,
   spotKey,
   whenWatchReady,
+  peekPick,
+  rememberPick,
   type WatchWhat,
 } from './player-keep'
 import { episodeLabel, usePlayer } from './player-view'
@@ -187,6 +189,62 @@ const hxFrameOn = computed<boolean>(() => {
   return hentasis.state.open && file !== undefined && file.kind === 'iframe'
 })
 
+
+/** Выбранная группа Hentasis: -1 — обычные источники, иначе индекс в hxGroups. */
+const hxVoice = ref(-1)
+
+const hxGroups = hentasis.groups
+const hxGroup = computed(() => (hxVoice.value >= 0 ? (hxGroups.value[hxVoice.value] ?? null) : null))
+
+/** Где в группах лежит текущий picked: группа и номер внутри неё (с единицы). */
+function hxAddress(): { group: number; number: number } | null {
+  const all = hxGroups.value
+  for (let g = 0; g < all.length; g += 1) {
+    const at = all[g]?.items.findIndex((it) => it.index === hentasis.state.picked) ?? -1
+    if (at >= 0) return { group: g, number: at + 1 }
+  }
+  return null
+}
+
+function pickHxVoice(gi: number): void {
+  hxVoice.value = gi
+  trouble.value = ''
+}
+
+function pickHxEpisode(gi: number, at: number): void {
+  const group = hxGroups.value[gi]
+  const item = group?.items[at]
+  if (group === undefined || item === undefined) return
+
+  hxVoice.value = gi
+  rememberPick(mediaId.value, `hx:${gi}`, at + 1, 0)
+  hentasis.play(item.index)
+}
+
+function hxSeenShare(gi: number, at: number): number {
+  return Math.round(peekShare(spotKey(mediaId.value, `hx:${gi}`, at + 1)) * 100)
+}
+
+function hxStep(delta: number): void {
+  const addr = hxAddress()
+  if (addr !== null) pickHxEpisode(addr.group, addr.number - 1 + delta)
+}
+
+/** Кодик-озвучка из списка: открытый Hentasis аккуратно закрываем. */
+function pickKodikVoice(key: string): void {
+  if (hentasis.state.open) hentasis.close()
+  pickVoice(key)
+}
+
+function doNext(): void {
+  if (hentasis.state.open) {
+    hxStep(1)
+    return
+  }
+  if (hasNext.value) nextEpisode()
+}
+
+  
 const {
   busy,
   trouble,
@@ -220,18 +278,32 @@ let cast: Cast | null = null
 /** Ключ места остановки того, что сейчас открыто. */
 let spot = ''
 
+/** Восстановление hx-выбора из истории: ждём, пока файлы догрузятся. */
+let hxResume: { gi: number; ep: number } | null = null
+
+watch(
+  () => hxGroups.value.length,
+  () => {
+    if (hxResume === null) return
+    const group = hxGroups.value[hxResume.gi]
+    const item = group?.items[hxResume.ep - 1]
+    if (group === undefined || item === undefined) return
+    hxVoice.value = hxResume.gi
+    hentasis.play(item.index)
+    hxResume = null
+  },
+)
+  
 /** Снимок для истории. Ключ главнее состояния экрана: метку пишут и после смены выбора,
  * поэтому серия и подпись озвучки берутся из самого ключа. */
 function aboutSpot(key: string): WatchWhat {
   const parts = splitSpot(key)
 
   // Файл Hentasis: среди озвучек его нет, подпись — метка источника и пометка файла.
-  if (parts !== null && parts.voiceKey === 'hx') {
-    const file = hentasis.state.files[parts.episode - 1]
-    const label =
-      file !== undefined && file.note !== undefined ? `Hentasis · ${file.note}` : 'Hentasis'
-
-    return { title: mainTitle.value, cover: cover.value, voiceLabel: label }
+  if (parts !== null && parts.voiceKey.startsWith('hx:')) {
+    const gi = Number(parts.voiceKey.slice(3))
+    const label = hxGroups.value[gi]?.label ?? 'Hentasis'
+    return { title: mainTitle.value, cover: cover.value, voiceLabel: `Hentasis · ${label}` }
   }
 
   const label =
@@ -566,9 +638,9 @@ function startHentasis(): void {
     rememberSpot(spot, Math.floor(el.currentTime), total.value, aboutSpot(spot))
   }
 
-  // Номер файла — с единицы, как нумерует сайт: нулевой «эпизод» хранилище
-  // считает пустым выбором и в историю такие записи не показывает.
-  const key = spotKey(mediaId.value, 'hx', hentasis.state.picked + 1)
+  const addr = hxAddress()
+  if (addr === null) return
+  const key = spotKey(mediaId.value, `hx:${addr.group}`, addr.number)
   const from = Math.max(0, peekSpot(key))
   spot = key
   at.value = Math.floor(from)
@@ -670,6 +742,7 @@ function onMeta(): void {
 function onEnded(): void {
   if (hentasis.state.open) {
     if (spot !== '') finishSpot(spot, total.value, aboutSpot(spot))
+    hxStep(1) // за краем группы pickHxEpisode молчит
     return
   }
   if (spot !== '') finishSpot(spot, total.value, aboutSpot(spot))
@@ -746,6 +819,10 @@ function doSkip(): void {
 }
 
 function doPrev(): void {
+  if (hentasis.state.open) {
+    hxStep(-1)
+    return
+  }
   if (prevNumber.value > 0) pickEpisode(prevNumber.value)
 }
 
@@ -948,7 +1025,7 @@ const leftKeys = computed<Key[]>(() => [
     run: doToggle,
   },
   { tip: 'Вперёд 10 секунд', sign: SIGN.ahead, run: () => nudge(STEP_SEC) },
-  { tip: 'Следующая серия', sign: SIGN.next, off: !hasNext.value, run: nextEpisode },
+  { tip: 'Следующая серия', sign: SIGN.next, off: !hasNext.value, run: doNext },
 ])
 
 /** Правый кластер: два пути кадра из окна и полный экран (всегда последний). Кнопки PiP нет,
@@ -986,8 +1063,7 @@ const rightKeys = computed<Key[]>(() => {
 function act(intent: PlayerIntent): void {
   // Под заслонкой играть нечего: пускаем выход, размер кадра и трансляцию — системной панели кадр не нужен, она зеркалит весь экран.
   if (veil.value && intent !== 'exit' && intent !== 'fullscreen' && intent !== 'cast') return
-  // Серии kodik не переключаются из-под кадра Hentasis.
-  if (hentasis.state.open && (intent === 'prevEpisode' || intent === 'nextEpisode')) return
+
   switch (intent) {
     case 'toggle':
       doToggle()
@@ -1019,12 +1095,8 @@ function act(intent: PlayerIntent): void {
     case 'faster':
       setRate(stepRate(rate.value, 1))
       return
-    case 'prevEpisode':
-      doPrev()
-      return
-    case 'nextEpisode':
-      if (hasNext.value) nextEpisode()
-      return
+    case 'prevEpisode': doPrev(); return
+    case 'nextEpisode': doNext(); return
     case 'skip':
       doSkip()
       return
@@ -1125,14 +1197,43 @@ onMounted(() => {
   renewTimer = window.setInterval(watchLink, RENEW_TICK_MS)
 
   // Метки нужны и полке серий, и первому кадру: просим их пораньше.
-  void whenWatchReady()
+  void whenWatchReady().then(() => {
+    const seen = peekPick(mediaId.value)
+    if (seen !== null && seen.voiceKey.startsWith('hx:')) {
+      hxResume = { gi: Number(seen.voiceKey.slice(3)), ep: seen.episode }
+    }
+  })
   void load()
 })
 
+watch(
+  () => [hentasis.state.open, hentasis.state.picked] as const,
+  ([open], [wasOpen]) => {
+    if (open) {
+      const file = hentasis.state.files[hentasis.state.picked]
+      if (file !== undefined && file.kind !== 'iframe') {
+        const addr = hxAddress()
+        if (addr !== null) hxVoice.value = addr.group
+        startHentasis()
+      } else {
+        pauseMainVideo()
+      }
+      return
+    }
+    if (wasOpen) {
+      hxVoice.value = -1
+      resumeKodik()
+    }
+  },
+)
+
+  
 // Новый адрес — новое аниме: экран не пересобирается, грузим сами.
 watch(mediaId, () => {
   playback?.close()
   spot = ''
+  hxVoice.value = -1
+  hxResume = null
   at.value = 0
   total.value = 0
   ready.value = 0
@@ -1489,13 +1590,26 @@ onBeforeUnmount(() => {
           <div class="am-play__box">
             <h3 class="am-play__h">Озвучка</h3>
 
-            <ul v-if="voices.length > 0" class="am-play__list" data-zone="voices">
+            <ul v-if="voices.length > 0 || hxGroups.length > 0" class="am-play__list" data-zone="voices">
+              <li v-for="(group, gi) in hxGroups" :key="`hx-${gi}`">
+                <button
+                  class="am-play__item"
+                  :class="{ 'am-play__item--on': hxVoice === gi }"
+                  type="button"
+                  @click="pickHxVoice(gi)"
+                >
+                  <span class="am-play__word-cut">{{ group.label }}</span>
+                  <span class="am-play__src">Hentasis</span>
+                  <span v-if="group.items.length > 0" class="am-play__time">файлов: {{ group.items.length }}</span>
+                </button>
+              </li>
+            
               <li v-for="voice in voices" :key="voice.key">
                 <button
                   class="am-play__item"
                   :class="{ 'am-play__item--on': voice.key === voiceKey }"
                   type="button"
-                  @click="pickVoice(voice.key)"
+                  @click="pickKodikVoice(voice.key)"
                 >
                   <span class="am-play__word-cut">{{ voice.label }}</span>
                   <span class="am-play__src">{{ voice.sourceLabel }}</span>
@@ -1512,7 +1626,25 @@ onBeforeUnmount(() => {
           <div class="am-play__box">
             <h3 class="am-play__h">Серии</h3>
 
-            <ul v-if="episodes.length > 0" class="am-play__list" data-zone="episodes">
+
+
+            <ul v-if="hxGroup !== null" class="am-play__list" data-zone="episodes">
+              <li v-for="(item, at) in hxGroup.items" :key="item.file.url">
+                <button
+                  class="am-play__item"
+                  :class="{ 'am-play__item--on': hentasis.state.picked === item.index }"
+                  type="button"
+                  @click="pickHxEpisode(hxVoice, at)"
+                >
+                  <span class="am-play__num">{{ at + 1 }}</span>
+                  <span class="am-play__word-cut">{{ item.file.label }}</span>
+                  <span v-if="hxSeenShare(hxVoice, at) > 0" class="am-play__seen" aria-hidden="true">
+                    <span class="am-play__seen-fill" :style="{ width: hxSeenShare(hxVoice, at) + '%' }" />
+                  </span>
+                </button>
+              </li>
+            </ul>
+            <ul v-else-if="episodes.length > 0" class="am-play__list" data-zone="episodes">
               <li v-for="item in episodes" :key="item.number">
                 <button
                   class="am-play__item"
