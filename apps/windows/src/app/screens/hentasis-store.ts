@@ -282,7 +282,7 @@ async function openSlot(slot: number): Promise<void> {
   }
 
   // Домен: без схемы пробуем https сами; не адрес вовсе — жалуемся.
-  let origin = raw
+  let origin: string
   try {
     origin = new URL(raw).origin.replace(/\/+$/, '')
   } catch {
