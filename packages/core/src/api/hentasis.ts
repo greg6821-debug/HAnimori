@@ -535,9 +535,42 @@ export async function getHentasisInfo(
 }
 
 
+/** Источники из тегов video/source и data-атрибутов: в сыром HTML плеера
+ * манифест живёт обычно здесь. */
+function extractVideoTagSources(html: string, pageUrl: string): string[] {
+  const out: string[] = [];
+  const sourceRe = /<(?:source|video)[^>]+?(?:src|data-src)\s*=\s*["']([^"']+)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = sourceRe.exec(html)) !== null) {
+    const url = absolutize(m[1] ?? '', pageUrl);
+    if (url !== '') out.push(url);
+  }
+  return out;
+}
+
+/** Кандидаты манифеста из соседних ассетов: спрайт превью и субтитры лежат рядом
+ * с файлом и отличаются только суффиксом (01_raw_sprite.jpg → 01_raw.m3u8). */
+function manifestCandidates(html: string): string[] {
+  const out: string[] = [];
+  const assetRe = /https?:\/\/[^\s"'`<>\\]+?_(?:sprite|rus|eng)\.(?:jpg|ass)\b/gi;
+  let m: RegExpExecArray | null;
+  while ((m = assetRe.exec(html)) !== null) {
+    const base = (m[0] ?? '').replace(/_(?:sprite|rus|eng)\.(?:jpg|ass)$/i, '');
+    if (base !== '') out.push(`${base}.m3u8`);
+  }
+  return out;
+}
+
+async function looksLikeManifest(url: string, fetchPage: PageFetcher): Promise<boolean> {
+  try {
+    return (await fetchPage(url)).slice(0, 200).includes('#EXTM3U');
+  } catch {
+    return false;
+  }
+}
+
 /** Разыменование iframe-файла: цепочка страниц-плееров до прямой ссылки.
- * Зеркала: video.php → вложенный iframe на CDN-плеер (hencdn.top/video/N) → там файл.
- * Реклама (clickunder, шторки) — исполняемый JS, фетчем не исполняется и разбору не мешает. */
+ * Проверки «открыт напрямую» и реклама — исполняемый JS, фетчу безразличны. */
 export async function resolveHentasisDirect(
   iframeUrl: string,
   fetchPage: PageFetcher,
@@ -557,8 +590,7 @@ export async function resolveHentasisDirect(
       return null;
     }
 
-    // Конфиги плеера на странице: интересен только прямой файл; iframe запоминаем
-    // как следующий шаг цепочки (video.php внутри не считаем — это сам источник).
+    // 1) Конфиги плеера: прямой файл возвращаем, iframe — следующий шаг цепочки.
     let frame: string | undefined;
     for (const config of extractConfigs(html, url)) {
       for (const file of config.files) {
@@ -570,15 +602,27 @@ export async function resolveHentasisDirect(
       }
     }
 
-    if (frame === undefined) {
-      // Прямой ссылки и вложенного плеера нет — последний шанс: голая ссылка в тексте.
-      const found = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8)(?:\?[^\s"'`<>\\]*)?/i.exec(html);
-      if (found === null) return null;
-      const direct = absolutize(found[0] ?? '', url);
-      if (direct === '') return null;
-      return { url: direct, kind: classify(direct) };
+    // 2) Теги video/source и data-атрибуты.
+    for (const candidate of extractVideoTagSources(html, url)) {
+      const kind = classify(candidate);
+      if (kind === 'mp4' || kind === 'hls') return { url: candidate, kind };
     }
 
+    // 3) Голая ссылка в тексте.
+    const found = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8)(?:\?[^\s"'`<>\\]*)?/i.exec(html);
+    if (found !== null) {
+      const direct = absolutize(found[0] ?? '', url);
+      if (direct !== '') return { url: direct, kind: classify(direct) };
+    }
+
+    // 4) Явного нет: догадка по соседним ассетам, проверенная содержимым (#EXTM3U).
+    for (const candidate of manifestCandidates(html)) {
+      if (await looksLikeManifest(candidate, fetchPage)) {
+        return { url: candidate, kind: 'hls' };
+      }
+    }
+
+    if (frame === undefined) return null;
     url = frame;
   }
 
