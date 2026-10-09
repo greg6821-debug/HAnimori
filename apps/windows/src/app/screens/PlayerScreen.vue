@@ -704,6 +704,8 @@ function startHentasis(): void {
       'Файл найден, но не грузится (сеть, защита CDN или CORS). Подробности в журнале.'
   }, 25_000)
 
+  void attachHxSubtitles()
+
   if (file.kind === 'hls') {
     if (playback === null) return
     playback.open(file.url, from, true)
@@ -727,7 +729,6 @@ function startHentasis(): void {
 
   void el.play().catch(() => {})
   showResume(from)
-  void attachHxSubtitles()
 }
 
 /** Возврат к обычному потоку после Hentasis: kodik-серия продолжает со своего места. */
