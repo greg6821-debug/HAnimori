@@ -583,7 +583,7 @@ export async function resolveHentasisDirect(
     if (visited.has(url)) return null;
     visited.add(url);
 
-    let html = '';
+    let html: string;
     try {
       html = await fetchPage(url);
     } catch {
