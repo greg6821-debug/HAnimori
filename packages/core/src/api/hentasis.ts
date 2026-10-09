@@ -541,7 +541,6 @@ export async function getHentasisInfo(
   }
 }
 
-
 /** Дорожки субтитров из конфига плеера страницы: {"label":"Russian","src":"…01_raw_rus.ass"}. */
 function extractSubtitleTracks(html: string, pageUrl: string): HentasisSubtitle[] {
   const out: HentasisSubtitle[] = []
@@ -608,7 +607,6 @@ async function looksLikeManifest(url: string, fetchPage: PageFetcher): Promise<b
   }
 }
 
-
 function assTime(raw: string): number | null {
   const m = /(\d+):(\d{1,2}):(\d{1,2})[.,](\d{1,3})/.exec(raw.trim())
   if (m === null) return null
@@ -645,7 +643,6 @@ export function assToCues(source: string): { start: number; end: number; text: s
 
   return out
 }
-
 
 export interface HentasisDirect {
   url: string

@@ -286,7 +286,6 @@ let hxWatchdog = 0
 /** Дорожки субтитров, созданные для hx-файла: чистятся при смене/закрытии. */
 let hxSubTracks: TextTrack[] = []
 
-
 function clearHxSubtitles(): void {
   for (const track of hxSubTracks) {
     track.mode = 'disabled'
@@ -321,8 +320,6 @@ async function attachHxSubtitles(): Promise<void> {
   }
 }
 
-
-  
 /** Восстановление hx-выбора: играем, как только группы на месте; если они уже
  * загружены — срабатывает сразу, без ожидания. */
 function tryHxResume(): void {

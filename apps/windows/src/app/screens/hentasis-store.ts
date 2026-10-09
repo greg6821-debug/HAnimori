@@ -14,7 +14,7 @@ import {
   resolveHentasisDirect,
   assToCues,
   type HentasisFile,
-  type HentasisSubtitle,   // ← добавить
+  type HentasisSubtitle, // ← добавить
   type PageRequestInit,
 } from '@/api/hentasis'
 import { peekRussianName, prefetchRussianNames } from '@/core/media-title'
@@ -172,7 +172,6 @@ async function loadSubtitleCues(
 ): Promise<{ start: number; end: number; text: string }[]> {
   return assToCues(await fetchPage(src))
 }
-
 
 /** Названия, год и метка 18+ тем же путём, что и весь плеер: карточка AniList + русское имя. */
 async function fetchTitles(
