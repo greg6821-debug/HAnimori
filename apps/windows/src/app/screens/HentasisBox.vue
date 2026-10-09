@@ -7,6 +7,19 @@ import type { HentasisFile } from '@/api/hentasis'
 
 import { hentasis } from './hentasis-store'
 
+import { openUrl } from '@tauri-apps/plugin-opener'
+
+async function openSite(): Promise<void> {
+  const url = state.matchedUrl
+  if (url === '') return
+  try {
+    await openUrl(url)
+  } catch (e: unknown) {
+    state.trouble = `Браузер не открылся: ${e instanceof Error ? e.message : String(e)}`
+  }
+}
+
+  
 const props = defineProps<{ animeId: number }>()
 
 const state = hentasis.state
@@ -159,15 +172,14 @@ const groups = computed<FileGroup[]>(() => {
       </div>
     </div>
 
-    <a
+    <button
       v-if="state.matchedUrl !== ''"
       class="am-hx__link"
-      :href="state.matchedUrl"
-      target="_blank"
-      rel="noreferrer noopener"
+      type="button"
+      @click="openSite()"
     >
       Открыть страницу на сайте ↗
-    </a>
+    </button>
   </div>
 </template>
 
@@ -299,8 +311,10 @@ const groups = computed<FileGroup[]>(() => {
 }
 
 .am-hx__link {
-  color: #8ab4ff;
-  font-size: 12px;
-  text-decoration: none;
+  padding: 0;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
 }
 </style>
