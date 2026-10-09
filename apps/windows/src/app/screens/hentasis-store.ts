@@ -150,6 +150,15 @@ async function fetchPage(page: string, init?: PageRequestInit): Promise<string> 
     headers['Content-Type'] = 'application/x-www-form-urlencoded'
   }
 
+  const res = await tauriFetch(page, {
+    method: init?.method ?? 'GET',
+    headers,
+    body: init?.body,
+  })
+  if (!res.ok) throw new Error(`Сайт ответил HTTP ${res.status}`)
+  return res.text()
+}
+
 /** Названия, год и метка 18+ тем же путём, что и весь плеер: карточка AniList + русское имя. */
 async function fetchTitles(
   mediaId: number,
