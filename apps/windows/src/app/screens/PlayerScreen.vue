@@ -1334,8 +1334,25 @@ watch(
 )
 
 // Прокрутка страницы под театром: колесо мыши уводило бы её вслепую, и, выйдя из полного экрана, человек оказывался бы не там, где ушёл.
+// Прокрутка страницы под театром: колесо мыши уводило бы её вслепую…
+// Перенос узла театром сбрасывает <video> (media-элемент переинициализируется):
+// место останавливаем до переноса и ставим hx-файл заново после него.
 watch(wide, (on) => {
   document.body.style.overflow = on ? 'hidden' : ''
+
+  if (hentasis.state.open) {
+    const el = videoEl.value
+    if (el !== null && spot !== '') {
+      rememberSpot(spot, Math.floor(el.currentTime), total.value, aboutSpot(spot))
+    }
+
+    void nextTick().then(() => {
+      const file = hentasis.state.files[hentasis.state.picked]
+      if (hentasis.state.open && file !== undefined && file.kind !== 'iframe') {
+        startHentasis()
+      }
+    })
+  }
 })
 
 onBeforeUnmount(() => {
