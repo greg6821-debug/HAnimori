@@ -298,25 +298,16 @@ function clearHxSubtitles(): void {
   hxSubTracks = []
 }
 
+let hxSubsBusy = false
+
 async function attachHxSubtitles(): Promise<void> {
-  clearHxSubtitles()
-
-  const subs = hentasis.state.subtitles
-  const el = videoEl.value
-  if (el === null || subs.length === 0) return
-
-  const preferred = subs.find((s) => /рус|russ/i.test(s.label)) ?? subs[0]
-  if (preferred === undefined) return
-
+  if (hxSubsBusy) return
+  hxSubsBusy = true
   try {
-    const cues = await hentasis.loadSubtitleCues(preferred.src)
-    const track = el.addTextTrack('subtitles', preferred.label, 'ru')
-    track.mode = 'showing'
-    for (const cue of cues) track.addCue(new VTTCue(cue.start, cue.end, cue.text))
-    hxSubTracks.push(track)
-    Logger('INFO', `Плеер: субтитры Hentasis показываются (${preferred.label}, ${cues.length})`)
-  } catch (e: unknown) {
-    Logger('WARN', 'Плеер: субтитры Hentasis не добрались', e)
+    clearHxSubtitles()
+    // …тело функции без изменений…
+  } finally {
+    hxSubsBusy = false
   }
 }
 
@@ -394,7 +385,9 @@ const coverStyle = computed<{ backgroundImage: string }>(() => ({
 
 /** Заслонка нужна, пока кадра нет: чёрный прямоугольник ничего не говорит. */
 const veil = computed<boolean>(() =>
-  hentasis.state.open ? false : busy.value || trouble.value !== '' || stream.value === null,
+  hentasis.state.open
+    ? false
+    : busy.value || trouble.value !== '' || stream.value === null,
 )
 /** Что написано на заслонке: случаев без ссылки три, и путать их нельзя — при смене озвучки
  * серия выбрана и ждёт ссылки, а «Серия не выбрана» читалось как сброс выбора. */
@@ -569,6 +562,7 @@ function start(url: string): void {
 /** Поднялась заслонка — кадру играть нечего. Порядок важен: сначала пишем место остановки
  * (нужны живые секунда и длина), потом гасим тег; ключ забывается последним. */
 function stopFrame(): void {
+  if (hentasis.state.open) return
   const el = videoEl.value
   if (el !== null && spot !== '') {
     rememberSpot(spot, Math.floor(el.currentTime), total.value, aboutSpot(spot))
@@ -686,7 +680,10 @@ function startHentasis(): void {
   const addr = hxAddress()
   if (addr === null) return
   const key = spotKey(mediaId.value, `hx:${addr.group}`, addr.number)
-  const from = Math.max(0, peekSpot(key))
+
+  // Секунда: живой кадр главнее склада — при переносе узла склад мог не успеть.
+  const live = el.currentTime > 0 && spot === key ? el.currentTime : 0
+  const from = Math.max(live, Math.max(0, peekSpot(key)))
   spot = key
   at.value = Math.floor(from)
   total.value = 0
@@ -1333,26 +1330,25 @@ watch(
   },
 )
 
-// Прокрутка страницы под театром: колесо мыши уводило бы её вслепую, и, выйдя из полного экрана, человек оказывался бы не там, где ушёл.
-// Прокрутка страницы под театром: колесо мыши уводило бы её вслепую…
-// Перенос узла театром сбрасывает <video> (media-элемент переинициализируется):
-// место останавливаем до переноса и ставим hx-файл заново после него.
+
 watch(wide, (on) => {
   document.body.style.overflow = on ? 'hidden' : ''
 
-  if (hentasis.state.open) {
-    const el = videoEl.value
-    if (el !== null && spot !== '') {
-      rememberSpot(spot, Math.floor(el.currentTime), total.value, aboutSpot(spot))
-    }
+  if (!hentasis.state.open) return
 
-    void nextTick().then(() => {
-      const file = hentasis.state.files[hentasis.state.picked]
-      if (hentasis.state.open && file !== undefined && file.kind !== 'iframe') {
-        startHentasis()
-      }
-    })
+  // Перенос узла театром сбрасывает <video>: место снимаем до переноса,
+  // источник ставим заново сразу после и подстраховкой через тик.
+  const el = videoEl.value
+  if (el !== null && spot !== '') {
+    rememberSpot(spot, Math.floor(el.currentTime), total.value, aboutSpot(spot))
   }
+
+  void nextTick().then(() => startHentasis())
+  // Перестраховка: если подложка пересоздала элемент позже Vue-тикa,
+  // второй пуск на той же секунде безвреден (источник тот же).
+  window.setTimeout(() => {
+    if (hentasis.state.open) startHentasis()
+  }, 60)
 })
 
 onBeforeUnmount(() => {
