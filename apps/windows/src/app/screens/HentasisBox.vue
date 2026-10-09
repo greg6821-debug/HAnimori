@@ -89,7 +89,12 @@ const groups = computed<FileGroup[]>(() => {
     </label>
 
     <div class="am-hx__row">
-      <button class="am-hx__save" type="button" :disabled="state.busy" @click="hentasis.runSearch()">
+      <button
+        class="am-hx__save"
+        type="button"
+        :disabled="state.busy"
+        @click="hentasis.runSearch()"
+      >
         Искать по названию
       </button>
       <button
@@ -182,12 +187,7 @@ const groups = computed<FileGroup[]>(() => {
       </template>
     </template>
 
-    <button
-      v-if="state.matchedUrl !== ''"
-      class="am-hx__link"
-      type="button"
-      @click="openSite()"
-    >
+    <button v-if="state.matchedUrl !== ''" class="am-hx__link" type="button" @click="openSite()">
       Открыть страницу на сайте ↗
     </button>
   </div>

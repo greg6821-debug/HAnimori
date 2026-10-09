@@ -72,10 +72,10 @@ const IFRAME_JUNK =
   /(recaptcha|doubleclick|googletag|adservice|mc\.yandex|metrika|vk\.com\/js|oauth|telegram|banner|counter|googlesyndication)/i
 
 interface RawFile {
-  url: string;
-  label?: string;
+  url: string
+  label?: string
   /** Пометка из самого конфига плеера (RalodePlayer: имя группы-озвучки). */
-  note?: string;
+  note?: string
 }
 
 function clean(raw: string): string {
@@ -179,72 +179,71 @@ function collectFromConfig(body: string, base: string, files: RawFile[], seen: S
   }
 }
 
-
 /* ---------- RalodePlayer (зеркала hentasis) ---------- */
 
 interface RalodeEpisode {
-  aname?: string;
-  scode?: string;
-  lssort?: string | number;
+  aname?: string
+  scode?: string
+  lssort?: string | number
 }
 
 interface RalodeGroup {
-  items?: Record<string, RalodeEpisode> | RalodeEpisode[];
-  name?: string;
-  sort?: string | number;
+  items?: Record<string, RalodeEpisode> | RalodeEpisode[]
+  name?: string
+  sort?: string | number
 }
 
 /** Первая ссылка iframe из кода эпизода («<iframe src="/video.php?id=…">»). */
 function iframeSrcOf(code: string, pageUrl: string): string {
-  const m = /<iframe[^>]+?src\s*=\s*["']([^"']+)["']/i.exec(code);
-  return m === null ? '' : absolutize(m[1] ?? '', pageUrl);
+  const m = /<iframe[^>]+?src\s*=\s*["']([^"']+)["']/i.exec(code)
+  return m === null ? '' : absolutize(m[1] ?? '', pageUrl)
 }
 
 /** Первый JSON-объект после позиции: срез с балансом скобок, кавычки и эскейпы учитываются —
  * регуляркой с ленивой звёздочкой такой конфиг не взять, там вложенные объекты. */
 function balancedJsonObject(html: string, from: number): string | null {
-  const start = html.indexOf('{', from);
-  if (start < 0) return null;
+  const start = html.indexOf('{', from)
+  if (start < 0) return null
 
-  let depth = 0;
-  let inString = false;
-  let escape = false;
+  let depth = 0
+  let inString = false
+  let escape = false
 
   for (let i = start; i < html.length && i < start + 300000; i += 1) {
-    const ch = html[i] ?? '';
+    const ch = html[i] ?? ''
     if (escape) {
-      escape = false;
-      continue;
+      escape = false
+      continue
     }
     if (inString) {
-      if (ch === '\\') escape = true;
-      else if (ch === '"') inString = false;
-      continue;
+      if (ch === '\\') escape = true
+      else if (ch === '"') inString = false
+      continue
     }
-    if (ch === '"') inString = true;
-    else if (ch === '{') depth += 1;
+    if (ch === '"') inString = true
+    else if (ch === '{') depth += 1
     else if (ch === '}') {
-      depth -= 1;
-      if (depth === 0) return html.slice(start, i + 1);
+      depth -= 1
+      if (depth === 0) return html.slice(start, i + 1)
     }
   }
-  return null;
+  return null
 }
 
 /** Конфиг RalodePlayer: группы-озвучки с их эпизодами. Каждый эпизод — iframe-файл,
  * пометка файла — имя группы с сайта («Субтитры», «FumoDUB», «AniSTAR»). */
 function extractRalodeConfigs(html: string, pageUrl: string): RawConfig[] {
-  const call = html.indexOf('RalodePlayer.init(');
-  if (call < 0) return [];
+  const call = html.indexOf('RalodePlayer.init(')
+  if (call < 0) return []
 
-  const json = balancedJsonObject(html, call);
-  if (json === null) return [];
+  const json = balancedJsonObject(html, call)
+  if (json === null) return []
 
-  let data: Record<string, RalodeGroup>;
+  let data: Record<string, RalodeGroup>
   try {
-    data = JSON.parse(json) as Record<string, RalodeGroup>;
+    data = JSON.parse(json) as Record<string, RalodeGroup>
   } catch {
-    return [];
+    return []
   }
 
   const groups = Object.values(data).filter(
@@ -253,43 +252,41 @@ function extractRalodeConfigs(html: string, pageUrl: string): RawConfig[] {
       typeof group === 'object' &&
       group.items !== null &&
       typeof group.items === 'object',
-  );
-  if (groups.length === 0) return [];
+  )
+  if (groups.length === 0) return []
 
   // Порядок групп — как на сайте (поле sort), внутри группы — lssort эпизода.
-  groups.sort((a, b) => Number(a.sort ?? 0) - Number(b.sort ?? 0));
+  groups.sort((a, b) => Number(a.sort ?? 0) - Number(b.sort ?? 0))
 
-  const files: RawFile[] = [];
-  const seen = new Set<string>();
+  const files: RawFile[] = []
+  const seen = new Set<string>()
 
   for (const group of groups) {
     const episodes = Object.values(group.items ?? {})
       .filter((ep): ep is RalodeEpisode => ep !== null && typeof ep === 'object')
-      .sort((a, b) => Number(a.lssort ?? 0) - Number(b.lssort ?? 0));
+      .sort((a, b) => Number(a.lssort ?? 0) - Number(b.lssort ?? 0))
 
-    const name = (group.name ?? '').trim();
+    const name = (group.name ?? '').trim()
 
     episodes.forEach((ep, index) => {
-      const url = iframeSrcOf(ep.scode ?? '', pageUrl);
-      if (url === '' || seen.has(url)) return;
-      seen.add(url);
+      const url = iframeSrcOf(ep.scode ?? '', pageUrl)
+      if (url === '' || seen.has(url)) return
+      seen.add(url)
 
-      const label = (ep.aname ?? '').trim() || `Файл ${index + 1}`;
-      files.push(name === '' ? { url, label } : { url, label, note: name });
-    });
+      const label = (ep.aname ?? '').trim() || `Файл ${index + 1}`
+      files.push(name === '' ? { url, label } : { url, label, note: name })
+    })
   }
 
-  return files.length > 0 ? [{ files }] : [];
+  return files.length > 0 ? [{ files }] : []
 }
-
-
 
 /** Конфиги плееров страницы: у тайтла их бывает несколько (дубли шаблона,
  * зеркала), показывать надо один — выбор в getHentasisInfo. */
 function extractConfigs(html: string, pageUrl: string): RawConfig[] {
   // Зеркала используют RalodePlayer — у него свой формат, проверяем его первым.
-  const ralode = extractRalodeConfigs(html, pageUrl);
-  if (ralode.length > 0) return ralode;
+  const ralode = extractRalodeConfigs(html, pageUrl)
+  if (ralode.length > 0) return ralode
   const configs: RawConfig[] = []
   const seen = new Set<string>()
 
@@ -525,8 +522,8 @@ export async function getHentasisInfo(
       url: file.url,
       kind: classify(file.url),
     }
-    const note = file.note ?? noteMap.get(number);
-    if (note !== undefined && note !== '') built.note = note;
+    const note = file.note ?? noteMap.get(number)
+    if (note !== undefined && note !== '') built.note = note
     return built
   })
 
