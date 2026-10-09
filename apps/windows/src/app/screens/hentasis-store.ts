@@ -403,11 +403,12 @@ async function play(index: number): Promise<void> {
     writeLinks(map)
   }
 
-  // Страницы-плееры зеркал (video.php) в iframe отдают блокировку: чужой Referer.
-  // Разыменовываем в прямую ссылку и играем родным тегом; результат кешируется в files.
-  if (file.kind === 'iframe' && file.url.includes('video.php')) {
+  // Любой iframe-файл разыменовываем в прямую ссылку: iframe-слои у зеркал
+  // закрыты проверками (Referer/скрипты), а прямые файлы играются родным тегом.
+  // Результат кешируется в files — повторный клик уже mp4/hls и мимо резолва.
+  if (file.kind === 'iframe') {
     state.resolving = true
-    state.trouble = '' // заодно гасим старую ошибку перед новой попыткой
+    state.trouble = ''
     try {
       const direct = await resolveHentasisDirect(file.url, fetchPage)
       if (direct === null) {
