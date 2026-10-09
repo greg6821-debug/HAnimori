@@ -1,4 +1,4 @@
-name: drift-accept
+name: 2. drift-accept
 
 on:
   workflow_dispatch:
