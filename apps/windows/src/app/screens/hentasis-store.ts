@@ -284,14 +284,10 @@ async function runSearch(auto = false): Promise<void> {
   }
 }
 
-/** Номер показа тайтла: ответ на прошлый bindAnime места не имеет. */
-let bindRun = 0
-
 function bindAnime(id: number): void {
   state.open = false
   if (state.animeId === id) return
 
-  const mine = ++bindRun
   state.animeId = id
   state.basesText = readBases().join(', ')
   state.headersText = readHeadersText()
@@ -301,18 +297,14 @@ function bindAnime(id: number): void {
 
   const saved = readLinks()[String(id)]
   if (saved === undefined || saved.url === '') {
-    void runSearch(true).then(() => {
-      if (mine !== bindRun) resetResult() // ответ на ушедший тайтл — в мусор
-    })
+    void runSearch(true)
     return
   }
 
+  // Ссылка найдена раньше: никакого поиска — один запрос на страницу.
+  // Это восстановление выбора, который человек уже сделал сам, метка 18+ тут не проверяется.
   state.manualUrl = saved.url
   void loadPage(saved.url, false).then(() => {
-    if (mine !== bindRun) {
-      resetResult()
-      return
-    }
     if (state.trouble !== '') {
       state.trouble =
         `Сохранённая ссылка не открылась (${state.trouble}). ` +
