@@ -17,6 +17,32 @@ import {
 } from '@/api/hentasis'
 import { peekRussianName, prefetchRussianNames } from '@/core/media-title'
 
+
+import { computed, reactive } from 'vue'
+
+/** Группа файлов с одинаковой пометкой: по ней Hentasis выглядит как озвучка. */
+export interface HentasisGroup {
+  key: string
+  label: string
+  items: { index: number; file: HentasisFile }[]
+}
+
+const groups = computed<HentasisGroup[]>(() => {
+  const byNote = new Map<string, HentasisGroup>()
+
+  state.files.forEach((file, index) => {
+    const note = file.note ?? ''
+    // Файл без пометки — группа из одного; пустая строка не склеивает их в ряд.
+    const key = note === '' ? `\u0000${index}` : note
+    const found = byNote.get(key)
+    if (found !== undefined) found.items.push({ index, file })
+    else byNote.set(key, { key, label: note === '' ? 'Hentasis' : note, items: [{ index, file }] })
+  })
+
+  return [...byNote.values()]
+})
+
+
 const LINKS_KEY = 'animori:hentasis-links'
 const BASES_KEY = 'animori:hentasis-bases'
 const DEFAULT_BASES = ['https://hentasis1.top']
@@ -338,6 +364,7 @@ function forget(): void {
 
 export const hentasis = {
   state,
+  groups,
   bindAnime,
   setBases,
   runSearch,
