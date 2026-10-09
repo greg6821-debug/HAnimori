@@ -385,9 +385,7 @@ const coverStyle = computed<{ backgroundImage: string }>(() => ({
 
 /** Заслонка нужна, пока кадра нет: чёрный прямоугольник ничего не говорит. */
 const veil = computed<boolean>(() =>
-  hentasis.state.open
-    ? false
-    : busy.value || trouble.value !== '' || stream.value === null,
+  hentasis.state.open ? false : busy.value || trouble.value !== '' || stream.value === null,
 )
 /** Что написано на заслонке: случаев без ссылки три, и путать их нельзя — при смене озвучки
  * серия выбрана и ждёт ссылки, а «Серия не выбрана» читалось как сброс выбора. */
@@ -1329,7 +1327,6 @@ watch(
     start(url)
   },
 )
-
 
 watch(wide, (on) => {
   document.body.style.overflow = on ? 'hidden' : ''
