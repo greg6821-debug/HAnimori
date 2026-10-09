@@ -1,5 +1,5 @@
 // packages/core/src/api/hentasis.ts
-// 
+//
 // Источник «Hentasis» (18+): DLE-сайт без API.
 // Два дела: поиск страницы тайтла через поиск сайта (POST-форма DLE, AJAX-поиск,
 // GET-фолбэки) по названиям с AniList и разбор страницы — список файлов плеера.
@@ -565,7 +565,6 @@ function extractMediaUrls(html: string): string[] {
   return out
 }
 
-
 /** Кандидаты манифеста из соседних ассетов: спрайт превью и субтитры лежат рядом
  * с файлом и отличаются только суффиксом (01_raw_sprite.jpg → 01_raw.m3u8). */
 function manifestCandidates(html: string): string[] {
@@ -618,7 +617,7 @@ export async function resolveHentasisDirect(
       throw new Error(`Страница плеера не отдалась (${url}): ${why}`, { cause: e })
     }
 
-        // 1) Теги video/source — самый надёжный след манифеста на странице плеера.
+    // 1) Теги video/source — самый надёжный след манифеста на странице плеера.
     for (const candidate of extractVideoTagSources(html, url)) {
       const kind = classify(candidate)
       if (kind === 'mp4' || kind === 'hls') {
@@ -639,7 +638,6 @@ export async function resolveHentasisDirect(
         }
       }
     }
-
 
     // 3) Полные адреса файлов: расширение сверяется в конце пути, обрезок не бывает.
     for (const candidate of extractMediaUrls(html)) {
