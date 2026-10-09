@@ -1,4 +1,4 @@
-<script setup lang="ts"> 
+<script setup lang="ts">
 // Экран просмотра — разметка и связь с <video>; данные в player-view.ts. Своя панель: родная в WebView2
 // не красится и не проходит пультом. Полный экран двумя шагами (театр в body + окно через мост); срок ссылки следим сами.
 import {
@@ -401,9 +401,7 @@ const coverStyle = computed<{ backgroundImage: string }>(() => ({
 
 /** Заслонка нужна, пока кадра нет: чёрный прямоугольник ничего не говорит. */
 const veil = computed<boolean>(() =>
-  hentasis.state.open
-    ? false
-    : busy.value || trouble.value !== '' || stream.value === null,
+  hentasis.state.open ? false : busy.value || trouble.value !== '' || stream.value === null,
 )
 
 /** Что написано на заслонке: случаев без ссылки три, и путать их нельзя — при смене озвучки
