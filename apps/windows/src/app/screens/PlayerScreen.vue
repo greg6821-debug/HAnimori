@@ -281,6 +281,9 @@ let spot = ''
 /** Восстановление hx-выбора из истории: ждём, пока файлы догрузятся. */
 let hxResume: { gi: number; ep: number } | null = null
 
+/** Сторожок hx-файла: метаданные не приехали за 25 секунд — файл не грузится. */
+let hxWatchdog = 0
+  
 /** Восстановление hx-выбора: играем, как только группы на месте; если они уже
  * загружены — срабатывает сразу, без ожидания. */
 function tryHxResume(): void {
@@ -653,6 +656,17 @@ function startHentasis(): void {
   total.value = 0
   ready.value = 0
   hoverShare.value = -1
+
+  Logger('INFO', `Hentasis: старт файла (${file.kind}) ${file.url}`)
+
+  // Сторожок для ЛЮБОГО вида файла: метаданные не приехали за 25с — файл не грузится.
+  if (hxWatchdog !== 0) window.clearTimeout(hxWatchdog)
+  hxWatchdog = window.setTimeout(() => {
+    hxWatchdog = 0
+    if (!hentasis.state.open || total.value > 0) return
+    hentasis.state.trouble =
+      'Файл найден, но не грузится (сеть, защита CDN или CORS). Подробности в журнале.'
+  }, 25_000)
 
   if (file.kind === 'hls') {
     if (playback === null) return
@@ -1240,6 +1254,10 @@ watch(
     }
     if (wasOpen) {
       hxVoice.value = -1
+      if (hxWatchdog !== 0) {
+        window.clearTimeout(hxWatchdog)
+        hxWatchdog = 0
+      }
       resumeKodik()
     }
   },
@@ -1280,33 +1298,7 @@ watch(wide, (on) => {
   document.body.style.overflow = on ? 'hidden' : ''
 })
 
-// Hentasis: видео-файл встаёт в общий тег, iframe — слоем поверх (главный на паузе);
-// закрытие возвращает kodik-поток к его месту.
-watch(
-  () =>
-    [
-      hentasis.state.open,
-      hentasis.state.picked,
-      hentasis.state.files[hentasis.state.picked]?.url ?? '',
-    ] as const,
-  ([open], [wasOpen]) => {
-    if (open) {
-      const file = hentasis.state.files[hentasis.state.picked]
-      if (file !== undefined && file.kind !== 'iframe') {
-        const addr = hxAddress()
-        if (addr !== null) hxVoice.value = addr.group
-        startHentasis()
-      } else {
-        pauseMainVideo()
-      }
-      return
-    }
-    if (wasOpen) {
-      hxVoice.value = -1
-      resumeKodik()
-    }
-  },
-)
+
 
 onBeforeUnmount(() => {
   const el = videoEl.value
