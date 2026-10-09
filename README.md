@@ -17,7 +17,7 @@
 к API и подставляет русские названия и описания из Shikimori —
 браузер и менеджер скриптов не нужны.
 
-[![Версия](https://img.shields.io/badge/версия-3.1.0-02A9FF?style=flat-square&labelColor=0B1622)](https://github.com/greg6821-debug/HAnimori/releases)
+[![Версия](https://img.shields.io/badge/версия-3.1.0-02A9FF?style=flat-square&labelColor=0B1622)](https://github.com/foulnike/Animori/releases)
 [![Лицензия](https://img.shields.io/badge/лицензия-MIT-02A9FF?style=flat-square&labelColor=0B1622)](LICENSE)
 [![Windows](https://img.shields.io/badge/Windows%2010%2F11-0078D4?style=flat-square&logo=windows&logoColor=white)](apps/windows)
 
@@ -75,10 +75,28 @@
 копией в облако. Смотрите в отдельном окне или транслируйте на телевизор.
 Подробности — в [apps/windows](apps/windows).
 
+## Приложение для телевизора
+
+**Android TV, Android 7.0 и новее**, управление с пульта.
+
+<p align="center">
+  <img src="apps/android-tv/screens/preview-calendar.png" width="23%" alt="Календарь выхода серий">
+  <img src="apps/android-tv/screens/preview-recs.png" width="23%" alt="Полки рекомендаций">
+  <img src="apps/android-tv/screens/preview-lists.png" width="23%" alt="Мои списки">
+  <img src="apps/android-tv/screens/preview-card.png" width="23%" alt="Карточка тайтла">
+</p>
+
+<p align="center"><sub>Календарь · Рекомендации · Списки · Карточка</sub></p>
+
+APK в [выпусках](https://github.com/foulnike/Animori/releases):
+`AniMori_3.1.0_armv7.apk` для 32-разрядных приставок и `AniMori_3.1.0_arm64.apk`
+для 64-разрядных. Установка из неизвестных источников, ставится с пульта.
+Подробности — в [apps/android-tv](apps/android-tv).
 
 ## Сборка
 
-Нужен Node.js 20 или новее;
+Нужен Node.js 24 или новее (npm 11): lock репозитория сгенерирован npm 11 и не
+встаёт под npm 10 с Node 20/22.
 
 ```bash
 npm ci
@@ -92,7 +110,7 @@ npm run typecheck
 cd apps/windows   && npm run tauri dev
 ```
 
-Выпуск делается тегом: `windows-v3.1.0`
+Выпуск делается тегом: `windows-v3.1.0` или `android-tv-v3.1.0`.
 
 ## Устройство репозитория
 
@@ -106,7 +124,7 @@ cd apps/windows   && npm run tauri dev
 ## Лицензия
 
 [MIT](LICENSE). Зависимости приходят со своими лицензиями — перечень в
-[THIRD-PARTY.md](THIRD-PARTY.md), он собирается из `package-lock.json`. Русские названия и
+[THIRD-PARTY.md](docs/THIRD-PARTY.md), он собирается из `package-lock.json`. Русские названия и
 описания приходят из [Shikimori](https://shikimori.one);
 датасет собирается в [animori-data](https://github.com/greg6821-debug/HAnimori-data). Проект
 неофициальный и с командой AniList не связан.
@@ -115,3 +133,4 @@ cd apps/windows   && npm run tauri dev
 
 - [Политика обработки персональных данных](docs/PRIVACY.md) (русская и английская версии)
 - [Условия использования](docs/TERMS.md) (русская и английская версии)
+- [Безопасность](docs/SECURITY.md) — как сообщить об уязвимости

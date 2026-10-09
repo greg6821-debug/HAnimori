@@ -15,6 +15,7 @@
 | `script-src 'self'` | Без `'unsafe-inline'` и `'unsafe-eval'`. Это смысл всей политики |
 | `style-src 'unsafe-inline'` | Компоненты задают цвета через `:style` |
 | `img-src data:` | Заставка в `index.html` встроена как data-URI, плюс SVG-заглушки и blob-постеры |
+| `frame-src` (youtube, dailymotion) | Трейлеры — iframe только из этого списка. Новая площадка трейлеров требует хост и здесь, и в `TRAILER_SITES` (`packages/core/src/api/anilist-media.ts`): без хоста iframe блокируется молча |
 
 ## Почему остальное широкое
 

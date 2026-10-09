@@ -303,3 +303,33 @@ pub async fn animori_proxy_probe(app: AppHandle) -> Result<ProxyProbe, String> {
     .await
     .map_err(|e| format!("Проверка прокси не завершилась: {e}"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{read_port, read_string};
+
+    fn str_value(raw: &str) -> Option<serde_json::Value> {
+        Some(serde_json::Value::String(raw.to_string()))
+    }
+
+    #[test]
+    fn strings_are_trimmed_and_numbers_stringified() {
+        assert_eq!(read_string(str_value("  10.0.0.1  ")), "10.0.0.1");
+        assert_eq!(read_string(Some(serde_json::json!(8080))), "8080");
+        assert_eq!(read_string(Some(serde_json::Value::Bool(true))), "");
+        assert_eq!(read_string(None), "");
+    }
+
+    #[test]
+    fn port_bounds_match_normalize_proxy_port() {
+        assert_eq!(read_port(Some(serde_json::json!(8080))), 8080);
+        assert_eq!(read_port(str_value(" 8080 ")), 8080);
+        assert_eq!(read_port(Some(serde_json::json!(65535))), 65535);
+        assert_eq!(read_port(Some(serde_json::json!(0))), 0);
+        assert_eq!(read_port(Some(serde_json::json!(65536))), 0);
+        assert_eq!(read_port(str_value("65536")), 0);
+        assert_eq!(read_port(str_value("не число")), 0);
+        assert_eq!(read_port(Some(serde_json::json!(-1))), 0);
+        assert_eq!(read_port(None), 0);
+    }
+}

@@ -1,6 +1,6 @@
 # Политика обработки персональных данных
 
-**Редакция от 6 октября 2026 года.**
+**Редакция от 8 октября 2026 года.**
 
 ### 1. Оператор
 
@@ -24,9 +24,12 @@ Issues репозитория `https://github.com/foulnike/Animori`.
 
 ### 3. Какие данные не обрабатываются
 
-Программа не использует cookies, средства аналитики и телеметрии. У Оператора
-отсутствуют собственные серверы: данные не передаются Оператору каким-либо образом.
-Программа не собирает контактных данных и не использует профилирования.
+Программа не устанавливает собственные cookies и не использует средства аналитики
+и телеметрии. Сторонние страницы, которые программа открывает по просьбе пользователя, —
+форма входа AniList и встроенные плееры трейлеров, — могут применять cookies своих
+сервисов; действуют при этом их собственные политики. У Оператора отсутствуют
+собственные серверы: данные не передаются Оператору каким-либо образом. Программа
+не собирает контактных данных и не использует профилирования.
 
 ### 4. Сетевые запросы
 
@@ -35,11 +38,13 @@ Issues репозитория `https://github.com/foulnike/Animori`.
 
 | Сервис | Назначение |
 | :--- | :--- |
-| AniList (anilist.co, graphql.anilist.co) | каталог, список пользователя при входе, обновление расписания |
+| AniList (anilist.co, graphql.anilist.co, s4.anilist.co) | каталог, список пользователя при входе, обновление расписания, изображения |
 | Shikimori (shikimori.one, shikimori.io, shikimori.rip) | русские названия и описания, перенос списка по нику |
-| Kodik, Anilibria и их CDN | получение ссылок на видео по выбору пользователя |
-| Яндекс Диск (cloud-api.yandex.net, *.disk.yandex.ru) | сохранение и чтение копии списка — только по команде пользователя |
-| GitHub (github.com, api.github.com, raw.githubusercontent.com) | проверка обновлений, загрузка датасета названий |
+| AnimeThemes (api.animethemes.moe, graphql.animethemes.moe, a.animethemes.moe) | опенинги и эдинги — по нажатию пользователя; только настольное приложение |
+| Kodik, Anilibria и их CDN (kodik-api.com, kodikplayer.com, *.solodcdn.com, *.kodik-cdn.com, i.kodikres.com, anilibria.top) | получение ссылок на видео по выбору пользователя |
+| YouTube, Dailymotion (www.youtube.com, www.dailymotion.com) | показ трейлера во встроенном плеере — при открытии трейлера; только настольное приложение |
+| Яндекс Диск (cloud-api.yandex.net, *.disk.yandex.net, *.disk.yandex.ru, *.dst.yandex.net, *.dst.yandex.ru) | сохранение и чтение копии списка — только по команде пользователя |
+| GitHub (github.com, api.github.com, raw.githubusercontent.com, objects.githubusercontent.com) | проверка обновлений, загрузка датасета названий |
 
 Каждый из перечисленных сервисов действует в соответствии с собственной политикой
 конфиденциальности.
@@ -77,7 +82,7 @@ Issues репозитория `https://github.com/foulnike/Animori`.
 
 ## English version
 
-**Effective date: October 6, 2026.**
+**Effective date: October 8, 2026.**
 
 ### 1. Controller
 
@@ -100,9 +105,12 @@ AniMori processes the following user data, stored exclusively on the user's devi
 
 ### 3. Data not processed
 
-The application does not use cookies, analytics or telemetry. The Controller operates
-no servers: no data is transmitted to the Controller. The application does not
-collect contact details and performs no profiling.
+The application does not set its own cookies and uses no analytics or telemetry.
+Third-party pages opened at the user's request — the AniList sign-in form and
+embedded trailer players — may use cookies of their own services, governed by those
+services' own policies. The Controller operates no servers: no data is transmitted
+to the Controller. The application does not collect contact details and performs
+no profiling.
 
 ### 4. Network requests
 
@@ -111,11 +119,13 @@ only to the extent required by features requested by the user:
 
 | Service | Purpose |
 | :--- | :--- |
-| AniList (anilist.co, graphql.anilist.co) | catalogue, the user's list upon sign-in, schedule updates |
+| AniList (anilist.co, graphql.anilist.co, s4.anilist.co) | catalogue, the user's list upon sign-in, schedule updates, images |
 | Shikimori (shikimori.one, shikimori.io, shikimori.rip) | Russian titles and descriptions, list import by nickname |
-| Kodik, Anilibria and their CDNs | video links at the user's choice |
-| Yandex Disk (cloud-api.yandex.net, *.disk.yandex.ru) | saving and reading a backup of the list — only on the user's command |
-| GitHub (github.com, api.github.com, raw.githubusercontent.com) | update checks, title dataset download |
+| AnimeThemes (api.animethemes.moe, graphql.animethemes.moe, a.animethemes.moe) | openings and endings — at the user's request; desktop application only |
+| Kodik, Anilibria and their CDNs (kodik-api.com, kodikplayer.com, *.solodcdn.com, *.kodik-cdn.com, i.kodikres.com, anilibria.top) | video links at the user's choice |
+| YouTube, Dailymotion (www.youtube.com, www.dailymotion.com) | trailer shown in the embedded player — when the trailer is opened; desktop application only |
+| Yandex Disk (cloud-api.yandex.net, *.disk.yandex.net, *.disk.yandex.ru, *.dst.yandex.net, *.dst.yandex.ru) | saving and reading a backup of the list — only on the user's command |
+| GitHub (github.com, api.github.com, raw.githubusercontent.com, objects.githubusercontent.com) | update checks, title dataset download |
 
 Each of the listed services acts in accordance with its own privacy policy.
 

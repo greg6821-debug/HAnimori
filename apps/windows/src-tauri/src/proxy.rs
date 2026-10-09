@@ -163,6 +163,16 @@ fn read_port(value: Option<serde_json::Value>) -> u16 {
     }
 }
 
+/// Список исключений в вид Chromium: через точку с запятой; пустые записи и записи с пробелом
+/// отбрасываются — в имени хоста пробела быть не может, а строку аргументов он бы разорвал.
+fn normalize_bypass(raw: &str) -> String {
+    raw.split([',', ';', '\n', '\r'])
+        .map(|item| item.trim())
+        .filter(|item| !item.is_empty() && !item.contains(' '))
+        .collect::<Vec<_>>()
+        .join(";")
+}
+
 /// Разбор уезжает в поток, потому что таймаут резольверу не навязать; брошенный
 /// поток ничего не держит и дешевле зависшего без окна приложения.
 fn resolve_with_timeout(target: &str, timeout: Duration) -> Option<Vec<SocketAddr>> {
@@ -245,14 +255,7 @@ fn read_config(app: &AppHandle) -> Config {
         Some(value) => read_string(Some(value)),
     };
 
-    // Chromium ждёт список через точку с запятой; записи с пробелом отбрасываем —
-    // в имени хоста его быть не может, а строку аргументов он бы разорвал.
-    let bypass = raw_bypass
-        .split([',', ';', '\n', '\r'])
-        .map(|item| item.trim())
-        .filter(|item| !item.is_empty() && !item.contains(' '))
-        .collect::<Vec<_>>()
-        .join(";");
+    let bypass = normalize_bypass(&raw_bypass);
 
     let login = read_string(store.get(KEY_LOGIN));
 
@@ -473,4 +476,53 @@ pub async fn animori_proxy_probe(app: AppHandle) -> Result<ProxyProbe, String> {
     })
     .await
     .map_err(|e| format!("Проверка прокси не завершилась: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_bypass, read_password, read_port, read_string, DEFAULT_BYPASS};
+
+    fn str_value(raw: &str) -> Option<serde_json::Value> {
+        Some(serde_json::Value::String(raw.to_string()))
+    }
+
+    #[test]
+    fn strings_are_trimmed_and_numbers_stringified() {
+        assert_eq!(read_string(str_value("  10.0.0.1  ")), "10.0.0.1");
+        assert_eq!(read_string(Some(serde_json::json!(8080))), "8080");
+        assert_eq!(read_string(Some(serde_json::Value::Bool(true))), "");
+        assert_eq!(read_string(None), "");
+    }
+
+    #[test]
+    fn password_keeps_edge_spaces() {
+        // Пробел по краям законен — карточка настроек его не обрезает.
+        assert_eq!(read_password(str_value("  p@ss word  ")), "  p@ss word  ");
+        assert_eq!(read_password(Some(serde_json::json!(42))), "42");
+        assert_eq!(read_password(None), "");
+    }
+
+    #[test]
+    fn port_bounds_match_normalize_proxy_port() {
+        assert_eq!(read_port(Some(serde_json::json!(8080))), 8080);
+        assert_eq!(read_port(str_value(" 8080 ")), 8080);
+        assert_eq!(read_port(Some(serde_json::json!(65535))), 65535);
+        assert_eq!(read_port(Some(serde_json::json!(0))), 0);
+        assert_eq!(read_port(Some(serde_json::json!(65536))), 0);
+        assert_eq!(read_port(str_value("65536")), 0);
+        assert_eq!(read_port(str_value("не число")), 0);
+        assert_eq!(read_port(Some(serde_json::json!(-1))), 0);
+        assert_eq!(read_port(None), 0);
+    }
+
+    #[test]
+    fn bypass_is_normalized_for_chromium() {
+        // Ключа нет — строка по умолчанию; пустое значение — пустой список (осознанный выбор).
+        assert_eq!(normalize_bypass(DEFAULT_BYPASS), "localhost;127.0.0.1");
+        assert_eq!(normalize_bypass(""), "");
+        assert_eq!(normalize_bypass("a, b;c\n d ,"), "a;b;c;d");
+        // Запись с пробелом отбрасывается: аргумент командной строки был бы разорван.
+        assert_eq!(normalize_bypass("localhost, has space"), "localhost");
+        assert_eq!(normalize_bypass("  ,  ;  "), "");
+    }
 }

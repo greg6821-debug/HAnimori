@@ -104,7 +104,7 @@
 | `animori_reload`, `animori_restart`               | перезагрузить окно, перезапустить приложение |
 | `animori_open_external`                           | отдать адрес системе                         |
 | `animori_auth_start/_submit/_status/_logout`      | вход в AniList                               |
-| `animori_anilist_query`                           | запрос к AniList из процесса оболочки        |
+| `animori_anilist_query`                           | запрос (query) к AniList; `mutation` отклоняется |
 | `animori_file_read/_write`                        | чтение и запись своих файлов                 |
 | `animori_export_pick_dir`, `animori_export_write` | выгрузка списка файлом                       |
 | `animori_track_pick_dir`, `animori_track_write`   | выгрузка трека темы                          |
@@ -114,7 +114,9 @@
 окончателен: промах плагин отклоняет до сети.
 
 Токен AniList не покидает Rust: команда принимает тело запроса, заголовок авторизации
-подставляет оболочка. Входа в AniList на приставке нет.
+подставляет оболочка. Тела с `mutation` команда отклоняет до подстановки токена
+(`reject_mutation` в `anilist.rs`) — приложение только читает список. Входа в AniList
+на приставке нет.
 
 ## Обновление
 

@@ -15,7 +15,7 @@ on:
       tag:
         description: 'Тег выпуска'
         required: true
-        default: 'android-tv-v3.1.0'
+        default: 'android-tv-v3.1.1'
       dry:
         description: 'Пробный прогон: собрать и подписать, но релиз не публиковать'
         type: boolean
@@ -52,10 +52,10 @@ jobs:
 
     steps:
       - name: Исходный код
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Node.js
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           # Node 24 — та же версия, что в ci.yml и release.yml: lock генерирует
           # npm 11, а npm 10 из node 22 отвергает его на npm ci.
@@ -97,7 +97,7 @@ jobs:
       # Java 17: его требует Android Gradle Plugin 8.x. Более новый не нужен,
       # а более старый Gradle 8.14 не примет вовсе.
       - name: Java
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:
           java-version: 17
           distribution: temurin
@@ -218,7 +218,7 @@ jobs:
           ls -l "out/AniMori_${version}_${abi}.apk"
 
       - name: Артефакт прогона
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: apk-${{ matrix.abi }}
           # Путь от корня репозитория, а не от каталога приложения: у
@@ -245,7 +245,7 @@ jobs:
 
     steps:
       - name: Исходный код
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Номер версии из тега
         id: ver
@@ -306,7 +306,7 @@ jobs:
           PY
 
       - name: Собрать файлы выпуска
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           pattern: apk-*
           path: dist
@@ -323,11 +323,11 @@ jobs:
       # Черновик, в отличие от предварительного, в анонимном списке не виден вовсе,
       # поэтому draft остаётся выключенным.
       - name: Релиз
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           # Платформа в названии: оба продукта живут в одном репозитории, и без неё
-          # на странице Releases две строки «AniMori 3.1.0» не отличить. Апдейтер
+          # на странице Releases две строки «AniMori 3.1.1» не отличить. Апдейтер
           # приставки название не читает вовсе — он смотрит на tag_name и body.
           name: AniMori ${{ steps.ver.outputs.version }} — Android TV
           body: ${{ steps.notes.outputs.body }}

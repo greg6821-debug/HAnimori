@@ -57,7 +57,7 @@ lto = "thin"
 codegen-units = 1
 strip = "symbols"
 
-# Доступ к движку окна из Rust: потребитель один — proxy_auth.rs, событие авторизации живёт в COM WebView2.
+# Доступ к движку окна и к DPAPI из Rust: proxy_auth.rs (COM WebView2) и secrets.rs (шифр пропуска облака).
 # Версии не на глаз: их уже тянет wry (см. Cargo.lock); cfg(windows) обязателен — крейтов нет под другими ОС.
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.38"
@@ -65,4 +65,5 @@ windows = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_System_Com",
   "Win32_System_WinRT",
+  "Win32_Security_Cryptography",
 ] }

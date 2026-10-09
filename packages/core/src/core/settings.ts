@@ -5,8 +5,6 @@ import { Logger } from '../utils/logger'
 
 /** Источник русских тайтлов: Шикимори. Второго источника нет — см. docs/dev/windows/DATA.md. */
 export type TitleSource = 'shikimori' | 'off' | 'none'
-export type AccentPreset =
-  'site' | 'sakura' | 'mono' | 'catppuccin' | 'nord' | 'dracula' | 'matcha' | 'sunset' | 'custom'
 
 /**
  * Оформление окна; слово «тема» занято музыкальными темами, `amoled` — чёрный ноль: на OLED он не светится. */
@@ -27,9 +25,6 @@ export interface AniMoriSettings {
   enableFranchise: boolean
   enableThemes: boolean
   enableLogger: boolean
-  accentPreset: AccentPreset
-  /** Цвет пресета `custom` в hex: пустое и кривое равны теме сайта — разбор в core/accent.ts. */
-  accentCustom: string
   /** Оформление окна: тёмное, светлое или AMOLED. */
   appearance: AppearanceName
   /**
@@ -80,8 +75,6 @@ const DEFAULT_SETTINGS: AniMoriSettings = {
   enableFranchise: true,
   enableThemes: true,
   enableLogger: true,
-  accentPreset: 'site',
-  accentCustom: '',
   appearance: 'amoled',
   blockPlayerPopups: false,
   hideAds: false,
@@ -114,8 +107,6 @@ async function readSettings(): Promise<AniMoriSettings> {
     enableFranchise,
     enableThemes,
     enableLogger,
-    accentPreset,
-    accentCustom,
     appearance,
     blockPlayerPopups,
     hideAds,
@@ -141,8 +132,6 @@ async function readSettings(): Promise<AniMoriSettings> {
     storage.get('set_franchise', DEFAULT_SETTINGS.enableFranchise),
     storage.get('set_themes', DEFAULT_SETTINGS.enableThemes),
     storage.get('set_logger', DEFAULT_SETTINGS.enableLogger),
-    storage.get<AccentPreset>('am_accent', DEFAULT_SETTINGS.accentPreset),
-    storage.get('am_accent_custom', DEFAULT_SETTINGS.accentCustom),
     storage.get<AppearanceName>('am_appearance', DEFAULT_SETTINGS.appearance),
     storage.get('set_block_popups', DEFAULT_SETTINGS.blockPlayerPopups),
     storage.get('set_hide_ads', DEFAULT_SETTINGS.hideAds),
@@ -172,8 +161,6 @@ async function readSettings(): Promise<AniMoriSettings> {
     enableFranchise,
     enableThemes,
     enableLogger,
-    accentPreset,
-    accentCustom,
     appearance,
     blockPlayerPopups,
     hideAds,

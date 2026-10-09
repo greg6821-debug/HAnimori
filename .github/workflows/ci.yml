@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Исходный код
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       # Единая версия Node во всех трёх задачах — 24, как на машине разработчика:
       # lock генерирует npm 11 из этой версии, а npm 10 из node 20/22 отвергает
@@ -39,7 +39,7 @@ jobs:
       # его в lock). Раньше здесь стояли 22/20/22 — это и было причиной падения
       # «Missing: esbuild@0.28.2 from lock file».
       - name: Node.js
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
           cache: npm
@@ -78,10 +78,10 @@ jobs:
 
     steps:
       - name: Исходный код
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Node.js
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
           cache: npm
@@ -106,10 +106,10 @@ jobs:
 
     steps:
       - name: Исходный код
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Node.js
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
           cache: npm
@@ -145,7 +145,7 @@ jobs:
 
     steps:
       - name: Исходный код
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Окружение Rust
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
@@ -178,6 +178,13 @@ jobs:
       - name: Проверка компиляции
         working-directory: apps/${{ matrix.app }}/src-tauri
         run: cargo check --workspace
+
+      # Юнит-тесты чистой логики: валидация путей (export), разбор прокси (proxy),
+      # пропуск и nonce (auth), тела запросов к AniList (anilist). Падение тестов
+      # валит задачу — раньше эта логика не проверялась вовсе.
+      - name: Тесты
+        working-directory: apps/${{ matrix.app }}/src-tauri
+        run: cargo test --workspace
 
       - name: Линт
         working-directory: apps/${{ matrix.app }}/src-tauri

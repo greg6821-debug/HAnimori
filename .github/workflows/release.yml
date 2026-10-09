@@ -17,7 +17,7 @@ on:
       tag:
         description: 'Тег выпуска'
         required: true
-        default: 'windows-v3.1.0'
+        default: 'windows-v3.1.1'
       dry:
         description: 'Пробный прогон: собрать и подписать, но релиз не публиковать'
         type: boolean
@@ -42,10 +42,10 @@ jobs:
 
     steps:
       - name: Исходный код
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Node.js
-        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           # Node 24 — та же версия, что в ci.yml и release-tv.yml: lock генерирует
           # npm 11, а npm 10 из node 22 отвергает его на npm ci —
@@ -107,6 +107,24 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # Пустой секрет подписи лучше поймать здесь: на сборке он всплывает через минуты
+      # компиляции и без намёка на то, что дело в секрете.
+      - name: Проверка секретов подписи
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $missing = @()
+          foreach ($v in 'TAURI_SIGNING_PRIVATE_KEY', 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD') {
+            if ([string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($v))) { $missing += $v }
+          }
+          if ($missing) {
+            Write-Output "::error::Пустые секреты подписи: $($missing -join ', '). Задать в Settings -> Secrets and variables -> Actions."
+            exit 1
+          }
+          Write-Output 'Секреты подписи на месте.'
+
       # Нужны для beforeBuildCommand: сборку переднего края (npm run build:app) запускает сам
       # tauri-action перед компиляцией Rust.
       # Установка из корня: замок один на репозиторий, в каталоге приложения его нет.
@@ -130,7 +148,7 @@ jobs:
 
       - name: Сборка приложения и публикация релиза
         if: github.event_name == 'push' || !inputs.dry
-        uses: tauri-apps/tauri-action@fce9c6108b31ea247710505d3aaaa893ee6768d4 # v0
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -143,7 +161,7 @@ jobs:
           # tauri-action выпустил бы релиз с тегом `main`.
           tagName: ${{ inputs.tag || github.ref_name }}
           # Платформа в названии: оба продукта живут в одном репозитории, и без неё
-          # на странице Releases две строки «HAniMori 3.1.0» не отличить. Название
+          # на странице Releases две строки «AniMori 3.1.1» не отличить. Название
           # ничего не ломает — апдейтеры смотрят на тег, а не на него.
           releaseName: HAniMori ${{ steps.ver.outputs.version }} — Windows
           releaseBody: ${{ steps.notes.outputs.body }}
@@ -174,8 +192,8 @@ jobs:
           Copy-Item $setup.FullName "artifacts/${name}_Setup.exe"
           Write-Host "Исходный артефакт: $($setup.FullName)"
 
-      # Портабл-версия. Отдельной цели сборки под неё у Tauri нет: приложение — это один
-      # самодостаточный exe, интерфейс вшит в бинарник на этапе компиляции.
+      # Портабл-версия. Отдельной цели сборки под неё у Tauri нет: приложение — один exe с
+      # интерфейсом в бинарнике, но без WebView2 Runtime — предупреждение едет в README.md.
       - name: Портабл-архив
         shell: pwsh
         run: |
@@ -192,8 +210,10 @@ jobs:
           Copy-Item $exe.FullName (Join-Path $stage "$name.exe")
           Copy-Item README.md (Join-Path $stage 'README.md')
           Copy-Item ../../LICENSE (Join-Path $stage 'LICENSE')
-          Copy-Item ../../THIRD-PARTY.md (Join-Path $stage 'THIRD-PARTY.md')
-          Compress-Archive -Path "$stage/*" -DestinationPath "artifacts/${name}_${version}_x64-portable.zip" -Force
+          # Перечень зависимостей с лицензиями: MPL-2.0 требует уведомления, а портабл
+          # разбирают без репозитория под рукой — значит, перечень едет вместе с программой.
+          Copy-Item ../../docs/THIRD-PARTY.md (Join-Path $stage 'THIRD-PARTY.md')
+          Compress-Archive -Path "$stage/*" -DestinationPath "artifacts/AniMori_${version}_x64-portable.zip" -Force
           Write-Host "Портабл собран из: $($exe.FullName)"
 
       - name: Артефакты пробного прогона
@@ -207,7 +227,7 @@ jobs:
       # Пробный прогон сюда не доходит: сборка и подпись уже проверены, а публиковать нечего.
       - name: Доложить артефакты в релиз
         if: ${{ github.event_name == 'push' || !inputs.dry }}
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           # Пути от корня репозитория: JavaScript-шаги не знают про

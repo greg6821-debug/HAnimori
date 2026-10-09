@@ -4,7 +4,7 @@
 Сгенерирован из `package-lock.json`; список и файл обновляются одним шагом, поэтому
 расхождение между ними невозможно.
 
-Сам код AniMori распространяется под лицензией MIT — см. [LICENSE](LICENSE). Зависимости
+Сам код AniMori распространяется под лицензией MIT — см. [LICENSE](../LICENSE). Зависимости
 распространяются на условиях своих лицензий, а не MIT.
 
 ## Что важно знать про copyleft
@@ -23,7 +23,7 @@ AniMori.
 
 ## Состав
 
-Всего пакетов с указанной лицензией: **245**.
+Всего пакетов с указанной лицензией: **231**.
 
 ### Apache-2.0 (18)
 
@@ -69,14 +69,11 @@ AniMori.
 | nth-check | 2.1.1 |
 | uri-js | 4.4.1 |
 
-### BSD-3-Clause (5)
+### BSD-3-Clause (2)
 
 | Пакет | Версия |
 | --- | --- |
 | esquery | 1.7.0 |
-| istanbul-lib-coverage | 3.2.2 |
-| istanbul-lib-report | 3.0.1 |
-| istanbul-reports | 3.2.0 |
 | source-map-js | 1.2.2 |
 
 ### BlueOak-1.0.0 (1)
@@ -99,7 +96,7 @@ AniMori.
 | siginfo | 2.0.0 |
 | which | 2.0.2 |
 
-### MIT (186)
+### MIT (175)
 
 | Пакет | Версия |
 | --- | --- |
@@ -107,15 +104,12 @@ AniMori.
 | @babel/helper-validator-identifier | 7.29.7 |
 | @babel/parser | 7.29.9 |
 | @babel/types | 7.29.8 |
-| @bcoe/v8-coverage | 1.0.2 |
 | @cacheable/memory | 2.2.0 |
 | @cacheable/utils | 2.5.0 |
 | @eslint-community/eslint-utils | 4.10.1 |
 | @eslint-community/regexpp | 4.12.2 |
 | @eslint/js | 10.0.1 |
-| @jridgewell/resolve-uri | 3.1.2 |
 | @jridgewell/sourcemap-codec | 1.6.0 |
-| @jridgewell/trace-mapping | 0.3.31 |
 | @keyv/bigmap | 1.3.1 |
 | @keyv/serialize | 1.1.1 |
 | @oxc-project/types | 0.152.0 |
@@ -156,7 +150,6 @@ AniMori.
 | @typescript-eslint/utils | 8.71.1 |
 | @typescript-eslint/visitor-keys | 8.71.1 |
 | @vitejs/plugin-vue | 6.0.9 |
-| @vitest/coverage-v8 | 4.1.11 |
 | @vitest/expect | 4.1.11 |
 | @vitest/mocker | 4.1.11 |
 | @vitest/pretty-format | 4.1.11 |
@@ -183,7 +176,6 @@ AniMori.
 | ajv | 6.15.0 |
 | alien-signals | 1.0.13 |
 | assertion-error | 2.0.1 |
-| ast-v8-to-istanbul | 1.0.7 |
 | balanced-match | 1.0.2 |
 | balanced-match | 4.0.4 |
 | brace-expansion | 2.1.7 |
@@ -217,19 +209,16 @@ AniMori.
 | fsevents | 2.3.3 |
 | globals | 17.13.0 |
 | happy-dom | 20.14.5 |
-| has-flag | 4.0.0 |
 | hashery | 1.5.1 |
 | he | 1.2.0 |
 | hookified | 1.15.1 |
 | hookified | 2.2.0 |
-| html-escaper | 2.0.2 |
 | ignore | 5.3.2 |
 | ignore | 7.0.12 |
 | imurmurhash | 0.1.4 |
 | indent-string | 4.0.0 |
 | is-extglob | 2.1.1 |
 | is-glob | 4.0.3 |
-| js-tokens | 10.0.0 |
 | json-schema-traverse | 0.4.1 |
 | json-stable-stringify-without-jsonify | 1.0.1 |
 | keyv | 5.6.0 |
@@ -237,8 +226,6 @@ AniMori.
 | locate-path | 6.0.0 |
 | lodash-es | 4.18.1 |
 | magic-string | 0.30.21 |
-| magicast | 0.5.5 |
-| make-dir | 4.0.0 |
 | min-indent | 1.0.1 |
 | ms | 2.1.3 |
 | muggle-string | 0.4.1 |
@@ -266,7 +253,6 @@ AniMori.
 | stackback | 0.0.2 |
 | std-env | 4.3.0 |
 | strip-indent | 3.0.0 |
-| supports-color | 7.2.0 |
 | tinybench | 2.9.0 |
 | tinyexec | 1.3.1 |
 | tinyglobby | 0.2.17 |

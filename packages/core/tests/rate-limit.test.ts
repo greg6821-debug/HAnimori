@@ -317,4 +317,14 @@ describe('один поход на ключ', () => {
     expect(a).toBe('a')
     expect(b).toBe('b')
   })
+
+  it('задача, упавшая до первого ожидания, ключ не запирает', async () => {
+    // Синхронный throw, а не отклонённый промис: ключ обязан освободиться сразу.
+    const boom = (): Promise<number> => {
+      throw new Error('сразу')
+    }
+
+    await expect(once('сразу-отказ', boom)).rejects.toThrow('сразу')
+    await expect(once('сразу-отказ', async () => 5)).resolves.toBe(5)
+  })
 })

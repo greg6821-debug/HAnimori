@@ -182,3 +182,55 @@ pub async fn animori_track_write(
     .await
     .map_err(|e| format!("Запись трека не завершилась: {e}"))?
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{check_dir, check_name, check_shape, check_track_name};
+
+    #[test]
+    fn shape_rejects_empty_and_oversize() {
+        assert!(check_shape("").is_err());
+        assert!(check_shape(&"x".repeat(201)).is_err());
+        assert!(check_shape(&"x".repeat(200)).is_ok());
+    }
+
+    #[test]
+    fn shape_rejects_paths_not_names() {
+        // «..», «.» и «каталог/имя» — не имя файла: file_name не равен строке целиком.
+        assert!(check_shape("..").is_err());
+        assert!(check_shape(".").is_err());
+        assert!(check_shape("dir/file.xml").is_err());
+        assert!(check_shape("список.xml").is_ok());
+    }
+
+    #[test]
+    fn export_name_needs_xml_suffix() {
+        assert!(check_name("list.xml").is_ok());
+        assert!(check_name("LIST.XML").is_ok());
+        assert!(check_name("list.txt").is_err());
+        // Суффикс в середине не считается: конец имени — это конец.
+        assert!(check_name("list.xml.tmp").is_err());
+        // Суффикс не спасает, если в имени путь.
+        assert!(check_name("dir/list.xml").is_err());
+    }
+
+    #[test]
+    fn track_name_needs_known_audio_suffix() {
+        assert!(check_track_name("theme.ogg").is_ok());
+        assert!(check_track_name("theme.MP3").is_ok());
+        assert!(check_track_name("theme.exe").is_err());
+        assert!(check_track_name("theme").is_err());
+        assert!(check_track_name("dir/theme.ogg").is_err());
+    }
+
+    #[test]
+    fn dir_must_exist_and_be_absolute() {
+        assert!(check_dir("relative/dir").is_err());
+        assert!(check_dir("/нет/такого/каталога-animori").is_err());
+
+        let tmp = std::env::temp_dir();
+        let found = check_dir(tmp.to_str().expect("путь временного каталога"))
+            .expect("существующий каталог проходит");
+        assert_eq!(found, tmp);
+    }
+}

@@ -7,6 +7,9 @@
     "apps/windows",
     "apps/android-tv"
   ],
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "test": "npm run test:core && npm run test:windows && npm run test:android-tv",
     "test:core": "npm --prefix apps/windows run test:core",
@@ -29,7 +32,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@vitest/coverage-v8": "4.1.11",
     "axe-core": "4.14.0",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",

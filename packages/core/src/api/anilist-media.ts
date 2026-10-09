@@ -602,8 +602,9 @@ function textOrNull(value: string | null | undefined): string | null {
 }
 
 /** Адреса ролика по площадке: страница встраивания и обычная ссылка. Таблица, а не шаблон — вид
- * адреса у каждой
- * площадки свой; незнакомая даёт `null`. */
+ * адреса у каждой площадки свой; незнакомая даёт `null`. Новая площадка обязана входить в
+ * `frame-src` обоих tauri.conf.json: iframe без хоста блокируется CSP молча (см. docs/dev/CSP.md);
+ * vimeo в таблице нет — в данных AniList его трейлеры не находятся (замер выборкой). */
 const TRAILER_SITES: ReadonlyArray<
   readonly [string, (id: string) => string, (id: string) => string]
 > = [
@@ -617,7 +618,6 @@ const TRAILER_SITES: ReadonlyArray<
     (id) => `https://www.dailymotion.com/embed/video/${id}`,
     (id) => `https://www.dailymotion.com/video/${id}`,
   ],
-  ['vimeo', (id) => `https://player.vimeo.com/video/${id}`, (id) => `https://vimeo.com/${id}`],
 ]
 
 /** Трейлер из ответа или `null`: площадка сверяется целиком — «youtube» и «youtube.com» разные

@@ -6,7 +6,7 @@
 
 **Настольный клиент [AniList](https://anilist.co) для Windows со своим интерфейсом: списки, поиск, страницы тайтлов и студий, встроенный плеер. Всё на русском, без браузера и менеджера скриптов.**
 
-[![Версия](https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-3.1.0-02A9FF?style=flat-square&labelColor=0B1622)](https://github.com/foulnike/Animori/releases/latest)
+[![Версия](https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-3.1.1-02A9FF?style=flat-square&labelColor=0B1622)](https://github.com/foulnike/Animori/releases/latest)
 [![Лицензия](https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-MIT-02A9FF?style=flat-square&labelColor=0B1622)](../../LICENSE)
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
@@ -35,7 +35,14 @@ AniMori — неофициальный проект, он не связан с �
 
 ## Состояние
 
-Текущая версия — 3.1.0. В разделе [Releases](https://github.com/foulnike/Animori/releases) есть установщик, портативный архив и манифест обновлений.
+Текущая версия — 3.1.1. В разделе [Releases](https://github.com/foulnike/Animori/releases) есть установщик, портативный архив и манифест обновлений.
+
+> [!IMPORTANT]
+> **Портативному архиву нужен WebView2 Runtime.** Установщик тянет его сам, а
+> портативный `AniMori_*_x64-portable.zip` — нет: распакуйте архив и запустите
+> `AniMori.exe`. Если окно не открывается, поставьте Runtime
+> ([официальная страница](https://developer.microsoft.com/microsoft-edge/webview2/))
+> и повторите. Windows 11 и свежие обновления Windows 10 включают его в систему.
 
 Гибридная версия 2.0.2 больше не поддерживается и удалена из рабочих веток. Установленные копии обновились до 3.0 автоматически: идентификатор программы (`com.foulnike.animori`), ключ подписи и адрес манифеста обновлений не изменились. Настройки и токен хранятся в том же профиле, и новая версия их подхватывает. Подробнее — в [`docs/dev/windows/REPO-LAYOUT.md`](../../docs/dev/windows/REPO-LAYOUT.md).
 
@@ -113,7 +120,7 @@ npm test               # тесты с заглушкой вместо мост�
 
 ## Выпуск
 
-Релиз запускается тегом вида `windows-v3.1.0`. Сборка на `windows-latest` сверяет номер версии в теге с `package.json`, компилирует Rust, собирает установщик, подписывает обновление и публикует рядом `latest.json`. Описание релиза берётся из верхнего раздела `CHANGELOG.md`.
+Релиз запускается тегом вида `windows-v3.1.1`. Сборка на `windows-latest` сверяет номер версии в теге с `package.json`, компилирует Rust, собирает установщик, подписывает обновление и публикует рядом `latest.json`. Описание релиза берётся из верхнего раздела `CHANGELOG.md`.
 
 ## Документация
 

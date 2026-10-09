@@ -45,7 +45,7 @@ const head = `# Сторонние компоненты
 Сгенерирован из \`package-lock.json\`; список и файл обновляются одним шагом, поэтому
 расхождение между ними невозможно.
 
-Сам код AniMori распространяется под лицензией MIT — см. [LICENSE](LICENSE). Зависимости
+Сам код AniMori распространяется под лицензией MIT — см. [LICENSE](../LICENSE). Зависимости
 распространяются на условиях своих лицензий, а не MIT.
 
 ## Что важно знать про copyleft
@@ -76,5 +76,5 @@ const body = order
   })
   .join('\n')
 
-writeFileSync(new URL('../THIRD-PARTY.md', import.meta.url), head + body, 'utf8')
-console.log('THIRD-PARTY.md готов:', unique.length, 'пакетов,', order.length, 'лицензий')
+writeFileSync(new URL('../docs/THIRD-PARTY.md', import.meta.url), head + body, 'utf8')
+console.log('docs/THIRD-PARTY.md готов:', unique.length, 'пакетов,', order.length, 'лицензий')

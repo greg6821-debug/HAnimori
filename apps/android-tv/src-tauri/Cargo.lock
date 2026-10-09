@@ -60,8 +60,9 @@ dependencies = [
 
 [[package]]
 name = "animori"
-version = "3.1.0"
+version = "3.1.1"
 dependencies = [
+ "base64 0.22.1",
  "getrandom 0.3.4",
  "log",
  "serde",
@@ -75,6 +76,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-store",
  "tauri-plugin-window-state",
+ "windows",
 ]
 
 [[package]]

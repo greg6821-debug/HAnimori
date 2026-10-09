@@ -208,7 +208,67 @@ fn classify(error: reqwest::Error) -> String {
     }
 }
 
-/// Один запрос GraphQL к AniList. Тело собирает разметка, адрес и авторизация — наше дело: иначе команда стала бы способом отправить пропуск куда угодно.
+/// Байт в составе имени GraphQL: буква, цифра, подчёркивание. Всё прочее — граница токена.
+fn is_name_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+/// Есть ли в тексте запроса ключевое слово `mutation` отдельным токеном. Границы обязательны:
+/// имя вроде `mutationCount` — не операция. Обхода нет: выполнить mutation на сервере без
+/// этого токена нельзя, а свои запросы слова не содержат (переменные лежат отдельно).
+fn has_mutation_keyword(query: &str) -> bool {
+    const WORD: &[u8] = b"mutation";
+    let bytes = query.as_bytes();
+    let mut at = 0;
+
+    while let Some(offset) = bytes[at..]
+        .windows(WORD.len())
+        .position(|window| window == WORD)
+    {
+        let start = at + offset;
+        let end = start + WORD.len();
+
+        let before_ok = start == 0 || !is_name_byte(bytes[start - 1]);
+        let after_ok = end == bytes.len() || !is_name_byte(bytes[end]);
+
+        if before_ok && after_ok {
+            return true;
+        }
+
+        at = end;
+    }
+
+    false
+}
+
+/// Наше приложение только читает: тело с mutation отклоняется ДО подстановки токена — последний
+/// рубеж, если окно скомпрометировано. Проверяется поле `query`: строки в `variables` (поиск
+/// пользователя) ключевое слово не содержат по своей роли. Нет поля query — отправлять нечего,
+/// AniList такое отверг бы сам.
+fn reject_mutation(body: &str) -> Result<(), String> {
+    let query = serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("query")
+                .and_then(|query| query.as_str())
+                .map(str::to_string)
+        });
+
+    let Some(query) = query else {
+        return Err("Тело запроса не разобрано: нет поля query".to_string());
+    };
+
+    if has_mutation_keyword(&query) {
+        return Err(
+            "Запрос отклонён: mutation запрещён, приложение только читает список".to_string(),
+        );
+    }
+
+    Ok(())
+}
+
+/// Один запрос GraphQL к AniList. Тело собирает разметка, адрес и авторизация — наше дело: иначе команда стала бы способом отправить пропуск куда угодно. Mutation отклоняется до подстановки токена: см. reject_mutation.
 #[tauri::command]
 pub async fn animori_anilist_query(
     app: AppHandle,
@@ -216,6 +276,8 @@ pub async fn animori_anilist_query(
     body: String,
     use_auth: bool,
 ) -> Result<AniListReply, String> {
+    reject_mutation(&body)?;
+
     let token = if use_auth { read_token(&app) } else { None };
 
     if use_auth && token.is_none() {
@@ -254,4 +316,73 @@ pub async fn animori_anilist_query(
         headers,
         text,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{has_mutation_keyword, reject_mutation};
+
+    /// Тело в форме, в каком его собирает anilist.ts: строка запроса плюс переменные.
+    fn body(query: &str, variables: serde_json::Value) -> String {
+        serde_json::json!({ "query": query, "variables": variables }).to_string()
+    }
+
+    #[test]
+    fn plain_query_passes() {
+        let ok = body("query Page { media { id } }", serde_json::json!({}));
+        assert!(reject_mutation(&ok).is_ok());
+    }
+
+    #[test]
+    fn shorthand_query_passes() {
+        let ok = body("{ media { id } }", serde_json::json!({}));
+        assert!(reject_mutation(&ok).is_ok());
+    }
+
+    #[test]
+    fn mutation_is_rejected() {
+        let bad = body(
+            "mutation UpdateMediaListEntry($id: Int) { mediaListEntry { id } }",
+            serde_json::json!({ "id": 1 }),
+        );
+        let err = reject_mutation(&bad).expect_err("mutation должен быть отклонён");
+        assert!(err.contains("mutation"));
+    }
+
+    #[test]
+    fn mutation_bare_operation_is_rejected() {
+        let bad = body(
+            "mutation { saveListEntry(id: 1) { id } }",
+            serde_json::json!({}),
+        );
+        assert!(reject_mutation(&bad).is_err());
+    }
+
+    #[test]
+    fn mutation_word_in_variables_is_fine() {
+        // Пользователь вправе искать слово «mutation»: переменные — не текст запроса.
+        let ok = body(
+            "query Search($s: String) { Media(search: $s) { id } }",
+            serde_json::json!({ "s": "mutation" }),
+        );
+        assert!(reject_mutation(&ok).is_ok());
+    }
+
+    #[test]
+    fn keyword_requires_word_boundaries() {
+        // Имя с «mutation» внутри — не операция.
+        assert!(!has_mutation_keyword("query { media { mutationCount } }"));
+        assert!(!has_mutation_keyword("my_mutation"));
+        assert!(!has_mutation_keyword("mutations"));
+        assert!(has_mutation_keyword("mutation Update($id: Int) { x }"));
+        assert!(has_mutation_keyword("query X { a } mutation Y { b }"));
+        assert!(has_mutation_keyword("\n  mutation M { x }"));
+    }
+
+    #[test]
+    fn body_without_query_field_is_rejected() {
+        assert!(reject_mutation("не json вовсе").is_err());
+        assert!(reject_mutation(r#"{"variables":{}}"#).is_err());
+        assert!(reject_mutation(r#"{"query":42}"#).is_err());
+    }
 }

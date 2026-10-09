@@ -123,16 +123,18 @@ fn read_status(app: &AppHandle) -> Result<AuthStatus, String> {
 
     let expires_at = store.get(KEY_EXPIRES_AT).and_then(|v| v.as_u64());
 
-    let alive = match (expires_at, now_secs()) {
-        (Some(deadline), Some(now)) => deadline > now + EXPIRY_MARGIN_SECS,
-        // Срок неизвестен — верим пропуску: так бывает после ручной вставки.
-        _ => true,
-    };
-
     Ok(AuthStatus {
-        authorized: alive,
+        authorized: alive(expires_at, now_secs()),
         expires_at,
     })
+}
+
+/// Пропуск жив, пока до срока больше запаса EXPIRY_MARGIN_SECS. Срок или часы неизвестны — верим пропуску: так бывает после ручной вставки.
+fn alive(expires_at: Option<u64>, now: Option<u64>) -> bool {
+    match (expires_at, now) {
+        (Some(deadline), Some(now)) => deadline > now + EXPIRY_MARGIN_SECS,
+        _ => true,
+    }
 }
 
 /// Запись пропуска и срока. save() явный: плагин не пишет файл сам, и без этого вызова вход жил бы только до закрытия приложения.
@@ -617,4 +619,102 @@ pub fn animori_auth_logout(app: AppHandle) -> Result<AuthStatus, String> {
 
     log::info!("Выход из аккаунта AniList");
     Ok(status)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        alive, authorize_url, check_token, decode, forget_nonce, fresh_nonce, param, relay_url,
+        remember_nonce, state_matches, EXPIRY_MARGIN_SECS,
+    };
+
+    #[test]
+    fn token_length_bounds() {
+        assert!(check_token("").is_err());
+        assert!(check_token(&"a".repeat(23)).is_err());
+        assert!(check_token(&"a".repeat(24)).is_ok());
+        assert!(check_token(&"a".repeat(8192)).is_ok());
+        assert!(check_token(&"a".repeat(8193)).is_err());
+    }
+
+    #[test]
+    fn token_shape_and_trim() {
+        let valid = "a".repeat(24);
+
+        // Копипаста тащит пробелы по краям — они срезаются.
+        let pasted = check_token(&format!("  {valid}  ")).ok();
+        assert_eq!(pasted.as_deref(), Some(valid.as_str()));
+
+        // Пробел или слеш внутри — пришёл адрес или кусок страницы, не пропуск.
+        let with_space = format!("{} {}", "a".repeat(12), "b".repeat(11));
+        assert!(check_token(&with_space).is_err());
+        let with_slash = format!("{}/{}", "a".repeat(12), "b".repeat(11));
+        assert!(check_token(&with_slash).is_err());
+        // Не-ASCII отсекается по символам, не по длине.
+        assert!(check_token(&format!("{}я", "a".repeat(23))).is_err());
+    }
+
+    #[test]
+    fn query_params_are_decoded() {
+        assert_eq!(param("code=abc&state=xyz", "state").as_deref(), Some("xyz"));
+        assert_eq!(param("state=a%20b", "state").as_deref(), Some("a b"));
+        assert_eq!(param("state=a+b", "state").as_deref(), Some("a b"));
+        assert_eq!(param("code=abc", "state"), None);
+
+        // Битая кодировка не роняет разбор: процент остаётся процентом.
+        assert_eq!(decode("%zz"), "%zz");
+        assert_eq!(decode("100%"), "100%");
+    }
+
+    #[test]
+    fn relay_url_matches_anilist_client() {
+        // Ровно строка из консоли разработчика AniList — менять нельзя.
+        assert_eq!(relay_url(), "http://127.0.0.1:48513/relay");
+    }
+
+    #[test]
+    fn authorize_url_passes_state() {
+        let url = authorize_url("nonce123");
+        assert!(url.starts_with("https://anilist.co/api/v2/oauth/authorize?"));
+        assert!(url.contains("client_id=48513"));
+        assert!(url.contains("response_type=token"));
+        assert!(url.ends_with("&state=nonce123"));
+    }
+
+    #[test]
+    fn nonce_lifecycle() {
+        // Один тест на весь цикл: NONCE — состояние модуля, другие тесты его не трогают.
+        assert!(!state_matches(Some("рано")));
+        remember_nonce("nonce1").expect("мьютекс доступен");
+        assert!(state_matches(Some("nonce1")));
+        assert!(!state_matches(Some("чужой")));
+        assert!(!state_matches(None));
+        forget_nonce();
+        assert!(!state_matches(Some("nonce1")));
+    }
+
+    #[test]
+    fn fresh_nonce_is_lowercase_hex() {
+        let nonce = fresh_nonce().expect("случайность доступна");
+        assert_eq!(nonce.len(), 32);
+        assert!(nonce
+            .chars()
+            .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c)));
+    }
+
+    #[test]
+    fn expiry_margin_is_enforced() {
+        let now = 1_000_000u64;
+
+        // Жив, пока запаса больше минуты; ровно минута и меньше — уже истёк.
+        assert!(alive(Some(now + EXPIRY_MARGIN_SECS + 1), Some(now)));
+        assert!(!alive(Some(now + EXPIRY_MARGIN_SECS), Some(now)));
+        assert!(!alive(Some(now + 30), Some(now)));
+        assert!(!alive(Some(now - 1), Some(now)));
+
+        // Срок или часы неизвестны — верим пропуску (ручная вставка, сбитые часы).
+        assert!(alive(None, Some(now)));
+        assert!(alive(Some(now + 30), None));
+        assert!(alive(None, None));
+    }
 }

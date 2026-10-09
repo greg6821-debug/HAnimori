@@ -30,6 +30,9 @@ mod updater;
 // Прокси для трафика окна. Без cfg сознательно: чтение настроек одинаково везде, разница в применении спрятана внутри модуля.
 mod proxy;
 
+// Секреты в хранилище: шифрация DPAPI для пропуска облака на Windows, прозрачный passthrough на прочих платформах.
+mod secrets;
+
 /// Что запоминается между запусками. Не StateFlags::all(): сохранённый VISIBLE даёт запуск без единого окна, а из FULLSCREEN в окне без меню нечем выйти.
 fn window_state_flags() -> StateFlags {
     StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED
