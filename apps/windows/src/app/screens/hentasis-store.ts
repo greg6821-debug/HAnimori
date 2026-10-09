@@ -307,7 +307,6 @@ function setBases(text: string): void {
   localStorage.setItem(BASES_KEY, JSON.stringify(bases.length > 0 ? bases : [...DEFAULT_BASES]))
 }
 
-
 function readHeadersText(): string {
   const raw = localStorage.getItem(HEADERS_KEY)
   return raw === null || raw.trim() === '' ? DEFAULT_HEADERS_TEXT : raw
@@ -342,7 +341,6 @@ function resetSettings(): void {
   state.headersText = DEFAULT_HEADERS_TEXT
   localStorage.setItem(HEADERS_KEY, DEFAULT_HEADERS_TEXT)
 }
-
 
 /** Домен из сырой строки; без схемы пробуем https:// сами. Пусто — не адрес вовсе. */
 function originOf(raw: string): string {
@@ -409,7 +407,7 @@ async function play(index: number): Promise<void> {
   // Разыменовываем в прямую ссылку и играем родным тегом; результат кешируется в files.
   if (file.kind === 'iframe' && file.url.includes('video.php')) {
     state.resolving = true
-    state.trouble = ''          // заодно гасим старую ошибку перед новой попыткой
+    state.trouble = '' // заодно гасим старую ошибку перед новой попыткой
     try {
       const direct = await resolveHentasisDirect(file.url, fetchPage)
       if (direct === null) {

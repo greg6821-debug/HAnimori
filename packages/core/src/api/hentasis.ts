@@ -1,5 +1,5 @@
 // packages/core/src/api/hentasis.ts
-//  
+//
 // Источник «Hentasis» (18+): DLE-сайт без API.
 // Два дела: поиск страницы тайтла через поиск сайта (POST-форма DLE, AJAX-поиск,
 // GET-фолбэки) по названиям с AniList и разбор страницы — список файлов плеера.
@@ -534,38 +534,37 @@ export async function getHentasisInfo(
   }
 }
 
-
 /** Источники из тегов video/source и data-атрибутов: в сыром HTML плеера
  * манифест живёт обычно здесь. */
 function extractVideoTagSources(html: string, pageUrl: string): string[] {
-  const out: string[] = [];
-  const sourceRe = /<(?:source|video)[^>]+?(?:src|data-src)\s*=\s*["']([^"']+)["']/gi;
-  let m: RegExpExecArray | null;
+  const out: string[] = []
+  const sourceRe = /<(?:source|video)[^>]+?(?:src|data-src)\s*=\s*["']([^"']+)["']/gi
+  let m: RegExpExecArray | null
   while ((m = sourceRe.exec(html)) !== null) {
-    const url = absolutize(m[1] ?? '', pageUrl);
-    if (url !== '') out.push(url);
+    const url = absolutize(m[1] ?? '', pageUrl)
+    if (url !== '') out.push(url)
   }
-  return out;
+  return out
 }
 
 /** Кандидаты манифеста из соседних ассетов: спрайт превью и субтитры лежат рядом
  * с файлом и отличаются только суффиксом (01_raw_sprite.jpg → 01_raw.m3u8). */
 function manifestCandidates(html: string): string[] {
-  const out: string[] = [];
-  const assetRe = /https?:\/\/[^\s"'`<>\\]+?_(?:sprite|rus|eng)\.(?:jpg|ass)\b/gi;
-  let m: RegExpExecArray | null;
+  const out: string[] = []
+  const assetRe = /https?:\/\/[^\s"'`<>\\]+?_(?:sprite|rus|eng)\.(?:jpg|ass)\b/gi
+  let m: RegExpExecArray | null
   while ((m = assetRe.exec(html)) !== null) {
-    const base = (m[0] ?? '').replace(/_(?:sprite|rus|eng)\.(?:jpg|ass)$/i, '');
-    if (base !== '') out.push(`${base}.m3u8`);
+    const base = (m[0] ?? '').replace(/_(?:sprite|rus|eng)\.(?:jpg|ass)$/i, '')
+    if (base !== '') out.push(`${base}.m3u8`)
   }
-  return out;
+  return out
 }
 
 async function looksLikeManifest(url: string, fetchPage: PageFetcher): Promise<boolean> {
   try {
-    return (await fetchPage(url)).slice(0, 200).includes('#EXTM3U');
+    return (await fetchPage(url)).slice(0, 200).includes('#EXTM3U')
   } catch {
-    return false;
+    return false
   }
 }
 
@@ -576,60 +575,58 @@ export async function resolveHentasisDirect(
   fetchPage: PageFetcher,
   maxHops = 3,
 ): Promise<{ url: string; kind: HentasisFileKind } | null> {
-  const visited = new Set<string>();
-  let url = iframeUrl;
+  const visited = new Set<string>()
+  let url = iframeUrl
 
   for (let hop = 0; hop < maxHops; hop += 1) {
-    if (visited.has(url)) return null;
-    visited.add(url);
+    if (visited.has(url)) return null
+    visited.add(url)
 
-    let html: string;
+    let html: string
     try {
-      html = await fetchPage(url);
+      html = await fetchPage(url)
     } catch {
-      return null;
+      return null
     }
 
     // 1) Конфиги плеера: прямой файл возвращаем, iframe — следующий шаг цепочки.
-    let frame: string | undefined;
+    let frame: string | undefined
     for (const config of extractConfigs(html, url)) {
       for (const file of config.files) {
-        const kind = classify(file.url);
-        if (kind === 'mp4' || kind === 'hls') return { url: file.url, kind };
+        const kind = classify(file.url)
+        if (kind === 'mp4' || kind === 'hls') return { url: file.url, kind }
         if (kind === 'iframe' && file.url !== iframeUrl && frame === undefined) {
-          frame = file.url;
+          frame = file.url
         }
       }
     }
 
     // 2) Теги video/source и data-атрибуты.
     for (const candidate of extractVideoTagSources(html, url)) {
-      const kind = classify(candidate);
-      if (kind === 'mp4' || kind === 'hls') return { url: candidate, kind };
+      const kind = classify(candidate)
+      if (kind === 'mp4' || kind === 'hls') return { url: candidate, kind }
     }
 
     // 3) Голая ссылка в тексте.
-    const found = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8)(?:\?[^\s"'`<>\\]*)?/i.exec(html);
+    const found = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8)(?:\?[^\s"'`<>\\]*)?/i.exec(html)
     if (found !== null) {
-      const direct = absolutize(found[0] ?? '', url);
-      if (direct !== '') return { url: direct, kind: classify(direct) };
+      const direct = absolutize(found[0] ?? '', url)
+      if (direct !== '') return { url: direct, kind: classify(direct) }
     }
 
     // 4) Явного нет: догадка по соседним ассетам, проверенная содержимым (#EXTM3U).
     for (const candidate of manifestCandidates(html)) {
       if (await looksLikeManifest(candidate, fetchPage)) {
-        return { url: candidate, kind: 'hls' };
+        return { url: candidate, kind: 'hls' }
       }
     }
 
-    if (frame === undefined) return null;
-    url = frame;
+    if (frame === undefined) return null
+    url = frame
   }
 
-  return null;
+  return null
 }
-
-
 
 /* ---------- Поиск тайтла по названиям ---------- */
 

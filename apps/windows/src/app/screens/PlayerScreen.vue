@@ -1654,7 +1654,11 @@ onBeforeUnmount(() => {
                 >
                   <span class="am-play__num">{{ pos + 1 }}</span>
                   <span class="am-play__word-cut">{{ item.file.label }}</span>
-                  <span v-if="hxSeenShare(hxVoice, pos) > 0" class="am-play__seen" aria-hidden="true">
+                  <span
+                    v-if="hxSeenShare(hxVoice, pos) > 0"
+                    class="am-play__seen"
+                    aria-hidden="true"
+                  >
                     <span
                       class="am-play__seen-fill"
                       :style="{ width: hxSeenShare(hxVoice, pos) + '%' }"
