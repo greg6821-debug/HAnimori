@@ -14,6 +14,7 @@ import {
   resolveHentasisDirect,
   assToCues,
   type HentasisFile,
+  type HentasisSubtitle,   // ← добавить
   type PageRequestInit,
 } from '@/api/hentasis'
 import { peekRussianName, prefetchRussianNames } from '@/core/media-title'
@@ -469,4 +470,5 @@ export const hentasis = {
   play,
   close,
   forget,
+  loadSubtitleCues,
 }
