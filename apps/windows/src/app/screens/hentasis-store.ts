@@ -174,8 +174,7 @@ async function loadSlot(slot: number, url: string, remember: boolean): Promise<b
 
     if (remember) {
       const map = readLinks()
-      const record =
-        map[String(state.animeId)] ?? { urls: [null, null, null] }
+      const record = map[String(state.animeId)] ?? { urls: [null, null, null] }
       record.urls.splice(slot, 1, url)
       writeLinks(map)
     }

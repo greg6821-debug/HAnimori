@@ -107,30 +107,30 @@ const groups = computed<FileGroup[]>(() => {
       <span class="am-hx__cap">Домены (автопоиск — только по первому)</span>
 
       <div v-for="n in 3" :key="`d${n}`" class="am-hx__row">
-      <input
-        v-model="state.basesText[n - 1]"
-        class="am-hx__url"
-        type="text"
-        spellcheck="false"
-        autocomplete="off"
-        :placeholder="
-          n === 1 ? 'https://v6.hentasis.me' : n === 2 ? 'https://hentasis1.top' : 'третий домен'
-        "
-        :aria-label="`Домен поиска ${n}`"
-        @keydown.stop
-        @change="saveBases()"
-      />
-      <button
-        class="am-hx__save"
-        type="button"
-        :disabled="
-          state.busy || state.slotBusy >= 0 || (state.basesText[n - 1] ?? '').trim() === ''
-        "
-        @click="hentasis.searchDomain(n - 1)"
-      >
-        Найти
-      </button>
-    </div>
+        <input
+          v-model="state.basesText[n - 1]"
+          class="am-hx__url"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          :placeholder="
+            n === 1 ? 'https://v6.hentasis.me' : n === 2 ? 'https://hentasis1.top' : 'третий домен'
+          "
+          :aria-label="`Домен поиска ${n}`"
+          @keydown.stop
+          @change="saveBases()"
+        />
+        <button
+          class="am-hx__save"
+          type="button"
+          :disabled="
+            state.busy || state.slotBusy >= 0 || (state.basesText[n - 1] ?? '').trim() === ''
+          "
+          @click="hentasis.searchDomain(n - 1)"
+        >
+          Найти
+        </button>
+      </div>
     </template>
     <p v-if="state.resolving" class="am-hx__note" role="status">Открываю файл…</p>
     <p v-else-if="state.busy || state.slotBusy >= 0" class="am-hx__note" role="status">
