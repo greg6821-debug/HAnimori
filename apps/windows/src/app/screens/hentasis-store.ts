@@ -48,6 +48,8 @@ export interface HentasisState {
   matchedUrls: string[]
   infoTitle: string
   files: HentasisFile[]
+  /** Слот-источник каждого файла: параллелен files, не меняется при разыменовании. */
+  fileSlots: number[]
   picked: number
   open: boolean
   resolving: boolean
@@ -67,6 +69,7 @@ const state = reactive<HentasisState>({
   basesText: ['', '', ''],
   infoTitle: '',
   files: [],
+  fileSlots: [],
   picked: -1,
   open: false,
   resolving: false,
@@ -163,6 +166,7 @@ function resetResult(): void {
   state.matchedUrls.splice(0, state.matchedUrls.length, '', '', '')
   state.infoTitle = ''
   state.files = []
+  state.fileSlots = []
   state.picked = -1
   state.others = []
   state.subtitles = []
@@ -199,6 +203,7 @@ async function loadSlot(slot: number, url: string, remember: boolean): Promise<b
     const offset = state.files.length
     info.files.forEach((file, i) => {
       state.files.push({ ...file })
+      state.fileSlots.push(slot)
       if (state.picked < 0 && i === 0) state.picked = offset
     })
 
@@ -445,32 +450,27 @@ function forget(): void {
   void runSearch()
 }
 
-/** Группы файлов по пометке; домен файла — в ключ, но не в подпись:
- * одинаковые озвучки разных зеркал не склеиваются, а видит человек чистую метку. */
+/** Группы файлов по пометке; слот — в ключ и в подпись («1-Субтитры»):
+ * одинаковые озвучки разных зеркал не склеиваются, а разыменование файла
+ * (URL меняется на CDN) группу не рвёт — слот стабилен. */
 const groups = computed(() => {
-  const byNote = new Map<
+  const byKey = new Map<
     string,
     { key: string; label: string; items: { index: number; file: HentasisFile }[] }
   >()
 
   state.files.forEach((file, index) => {
     const note = file.note ?? ''
-    const domain = (() => {
-      try {
-        return new URL(file.url).hostname
-      } catch {
-        return file.url
-      }
-    })()
-    // Домен — в ключ (одинаковые озвучки разных зеркал не склеиваются),
-    // но не в подпись: человеку всё равно, откуда файл.
-    const key = note === '' ? `\u0000${index}` : `${note}@@${domain}`
-    const found = byNote.get(key)
+    const slot = state.fileSlots[index] ?? 0
+    const label = `${slot + 1}-${note === '' ? 'Hentasis' : note}`
+    const key = note === '' ? `\u0000${index}` : `${slot}@@${note}`
+
+    const found = byKey.get(key)
     if (found !== undefined) found.items.push({ index, file })
-    else byNote.set(key, { key, label: note === '' ? 'Hentasis' : note, items: [{ index, file }] })
+    else byKey.set(key, { key, label, items: [{ index, file }] })
   })
 
-  return [...byNote.values()]
+  return [...byKey.values()]
 })
 
 export const hentasis = {
