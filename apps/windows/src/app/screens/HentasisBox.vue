@@ -20,28 +20,33 @@ watch(
 /** Есть ли пометки хоть у одного файла: без них рисуем простую оборку, как раньше. */
 const hasNotes = computed<boolean>(() => state.files.some((file) => file.note !== undefined))
 
-/** Группа = подряд идущие файлы с одинаковой пометкой; у файлов без пометок
- * группа своя у каждого (пустая строка не склеивает их в один ряд). */
+/** Группа = ВСЕ файлы с одинаковой пометкой (вид + команда), где бы они ни стояли
+ * в списке: две озвучки от разных команд — две строки, два субтитра от разных
+ * переводчиков — ещё две. Порядок групп — по первому появлению пометки (порядок
+ * сайта), внутри группы — порядок сайта. Файлы без пометок не склеиваются:
+ * у каждого своя строка, как у файлов без примечания в целом. */
 interface FileGroup {
   note: string
   items: { file: HentasisFile; index: number }[]
 }
 
 const groups = computed<FileGroup[]>(() => {
-  const out: FileGroup[] = []
+  const byNote = new Map<string, FileGroup>()
 
   for (let i = 0; i < state.files.length; i += 1) {
     const file = state.files[i]
     if (file === undefined) continue
 
     const note = file.note ?? ''
-    const last = out[out.length - 1]
+    // Файл без пометки — группа из одного: пустая строка не должна склеивать их в ряд.
+    const key = note === '' ? `\u0000${i}` : note
 
-    if (last !== undefined && last.note === note) last.items.push({ file, index: i })
-    else out.push({ note, items: [{ file, index: i }] })
+    const found = byNote.get(key)
+    if (found !== undefined) found.items.push({ file, index: i })
+    else byNote.set(key, { note, items: [{ file, index: i }] })
   }
 
-  return out
+  return [...byNote.values()]
 })
 </script>
 
