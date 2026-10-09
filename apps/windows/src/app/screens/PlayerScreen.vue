@@ -292,7 +292,8 @@ function clearHxSubtitles(): void {
     track.mode = 'disabled'
     while (track.cues !== null && track.cues.length > 0) {
       const cue = track.cues[0]
-      if (cue !== null) track.removeCue(cue)
+      if (cue === undefined) break
+      track.removeCue(cue)
     }
   }
   hxSubTracks = []
@@ -1298,6 +1299,7 @@ watch(
         window.clearTimeout(hxWatchdog)
         hxWatchdog = 0
       }
+      document.body.style.overflow = ''
       resumeKodik()
     }
   },
