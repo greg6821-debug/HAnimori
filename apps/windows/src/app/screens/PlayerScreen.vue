@@ -1645,23 +1645,19 @@ onBeforeUnmount(() => {
             <h3 class="am-play__h">Серии</h3>
 
             <ul v-if="hxGroup !== null" class="am-play__list" data-zone="episodes">
-              <li v-for="(item, at) in hxGroup.items" :key="item.file.url">
+              <li v-for="(item, pos) in hxGroup.items" :key="item.file.url">
                 <button
                   class="am-play__item"
                   :class="{ 'am-play__item--on': hentasis.state.picked === item.index }"
                   type="button"
-                  @click="pickHxEpisode(hxVoice, at)"
+                  @click="pickHxEpisode(hxVoice, pos)"
                 >
-                  <span class="am-play__num">{{ at + 1 }}</span>
+                  <span class="am-play__num">{{ pos + 1 }}</span>
                   <span class="am-play__word-cut">{{ item.file.label }}</span>
-                  <span
-                    v-if="hxSeenShare(hxVoice, at) > 0"
-                    class="am-play__seen"
-                    aria-hidden="true"
-                  >
+                  <span v-if="hxSeenShare(hxVoice, pos) > 0" class="am-play__seen" aria-hidden="true">
                     <span
                       class="am-play__seen-fill"
-                      :style="{ width: hxSeenShare(hxVoice, at) + '%' }"
+                      :style="{ width: hxSeenShare(hxVoice, pos) + '%' }"
                     />
                   </span>
                 </button>
