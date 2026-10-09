@@ -12,6 +12,7 @@ import {
   getHentasisInfo,
   isTitlePageUrl,
   resolveHentasisDirect,
+  assToCues,
   type HentasisFile,
   type PageRequestInit,
 } from '@/api/hentasis'
@@ -43,7 +44,7 @@ const groups = computed<HentasisGroup[]>(() => {
 
 const LINKS_KEY = 'animori:hentasis-links'
 const BASES_KEY = 'animori:hentasis-bases'
-const DEFAULT_BASES = ['https://hentasis1.top']
+const DEFAULT_BASES = ['https://v6.hentasis.me', 'https://hentasis1.top']
 
 const HEADERS_KEY = 'animori:hentasis-headers'
 
@@ -76,6 +77,7 @@ export interface HentasisState {
   open: boolean
   resolving: boolean
   headersText: string
+  subtitles: HentasisSubtitle[]
   others: { url: string; title: string }[]
 }
 
@@ -96,6 +98,7 @@ const state = reactive<HentasisState>({
   open: false,
   others: [],
   headersText: '',
+  subtitles: [],
   resolving: false,
 })
 
@@ -162,6 +165,14 @@ async function fetchPage(page: string, init?: PageRequestInit): Promise<string> 
   return res.text()
 }
 
+/** Cue'и субтитра: файл тянем через plugin-http (CORS не мешает), ASS разбираем на пары. */
+async function loadSubtitleCues(
+  src: string,
+): Promise<{ start: number; end: number; text: string }[]> {
+  return assToCues(await fetchPage(src))
+}
+
+
 /** Названия, год и метка 18+ тем же путём, что и весь плеер: карточка AniList + русское имя. */
 async function fetchTitles(
   mediaId: number,
@@ -186,6 +197,7 @@ function resetResult(): void {
   state.picked = -1
   state.others = []
   state.resolving = false
+  state.subtitles = []
 }
 
 async function loadPage(url: string, remember: boolean): Promise<void> {
@@ -416,6 +428,7 @@ async function play(index: number): Promise<void> {
       const direct = await resolveHentasisDirect(file.url, fetchPage)
       Logger('INFO', `Hentasis: файл разыменован (${direct.kind}) → ${direct.url}`)
       state.files[index] = { ...file, url: direct.url, kind: direct.kind }
+      state.subtitles = direct.subtitles
     } catch (e) {
       state.trouble = say(e)
       Logger('WARN', 'Hentasis: разыменование не удалось', e)
@@ -423,6 +436,8 @@ async function play(index: number): Promise<void> {
     } finally {
       state.resolving = false
     }
+  } else {
+    state.subtitles = []
   }
 
   state.open = true
