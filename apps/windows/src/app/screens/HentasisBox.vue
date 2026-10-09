@@ -16,6 +16,9 @@ const state = hentasis.state
 
 const showFiles = ref(false)
 
+/** Домены поиска спрятаны за переключателем: вписываются один раз. */
+const showDomains = ref(false)
+
 async function openSite(): Promise<void> {
   const url = state.matchedUrls[0]
   if (url === undefined || url === '') return
@@ -96,9 +99,14 @@ const groups = computed<FileGroup[]>(() => {
       </button>
     </div>
 
-    <span class="am-hx__cap">Домены поиска</span>
+    <button class="am-hx__file" type="button" @click="showDomains = !showDomains">
+      {{ showDomains ? 'Скрыть домены поиска' : 'Домены поиска' }}
+    </button>
 
-    <div v-for="n in 3" :key="`d${n}`" class="am-hx__row">
+    <template v-if="showDomains">
+      <span class="am-hx__cap">Домены (автопоиск — только по первому)</span>
+
+      <div v-for="n in 3" :key="`d${n}`" class="am-hx__row">
       <input
         v-model="state.basesText[n - 1]"
         class="am-hx__url"
@@ -123,7 +131,7 @@ const groups = computed<FileGroup[]>(() => {
         Найти
       </button>
     </div>
-
+    </template>
     <p v-if="state.resolving" class="am-hx__note" role="status">Открываю файл…</p>
     <p v-else-if="state.busy || state.slotBusy >= 0" class="am-hx__note" role="status">
       Ищу тайтл…
