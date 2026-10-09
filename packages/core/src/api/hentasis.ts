@@ -535,34 +535,51 @@ export async function getHentasisInfo(
 }
 
 
-/** Разыменование iframe-файла (video.php на зеркалах): тянем страницу плеера
- * с правильным Referer и достаём прямую ссылку. Без своего Referer такие страницы
- * отдают заглушку «содержимое заблокировано». */
+/** Разыменование iframe-файла: цепочка страниц-плееров до прямой ссылки.
+ * Зеркала: video.php → вложенный iframe на CDN-плеер (hencdn.top/video/N) → там файл.
+ * Реклама (clickunder, шторки) — исполняемый JS, фетчем не исполняется и разбору не мешает. */
 export async function resolveHentasisDirect(
   iframeUrl: string,
   fetchPage: PageFetcher,
+  maxHops = 3,
 ): Promise<{ url: string; kind: HentasisFileKind } | null> {
-  let html = '';
-  try {
-    html = await fetchPage(iframeUrl);
-  } catch {
-    return null;
-  }
+  const visited = new Set<string>();
+  let url = iframeUrl;
 
-  // Конфиги плеера на странице video.php (Playerjs/RalodePlayer), затем прямые ссылки.
-  for (const config of extractConfigs(html, iframeUrl)) {
-    for (const file of config.files) {
-      const kind = classify(file.url);
-      if (kind === 'mp4' || kind === 'hls') {
-        return { url: file.url, kind };
+  for (let hop = 0; hop < maxHops; hop += 1) {
+    if (visited.has(url)) return null;
+    visited.add(url);
+
+    let html = '';
+    try {
+      html = await fetchPage(url);
+    } catch {
+      return null;
+    }
+
+    // Конфиги плеера на странице: интересен только прямой файл; iframe запоминаем
+    // как следующий шаг цепочки (video.php внутри не считаем — это сам источник).
+    let frame: string | undefined;
+    for (const config of extractConfigs(html, url)) {
+      for (const file of config.files) {
+        const kind = classify(file.url);
+        if (kind === 'mp4' || kind === 'hls') return { url: file.url, kind };
+        if (kind === 'iframe' && file.url !== iframeUrl && frame === undefined) {
+          frame = file.url;
+        }
       }
     }
-  }
 
-  const found = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8)(?:\?[^\s"'`<>\\]*)?/i.exec(html);
-  if (found !== null) {
-    const url = absolutize(found[0] ?? '', iframeUrl);
-    if (url !== '') return { url, kind: classify(url) };
+    if (frame === undefined) {
+      // Прямой ссылки и вложенного плеера нет — последний шанс: голая ссылка в тексте.
+      const found = /(?:https?:)?\/\/[^\s"'`<>\\]+?\.(?:mp4|m3u8)(?:\?[^\s"'`<>\\]*)?/i.exec(html);
+      if (found === null) return null;
+      const direct = absolutize(found[0] ?? '', url);
+      if (direct === '') return null;
+      return { url: direct, kind: classify(direct) };
+    }
+
+    url = frame;
   }
 
   return null;
