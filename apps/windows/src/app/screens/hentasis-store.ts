@@ -11,6 +11,7 @@ import {
   buildSearchQueries,
   getHentasisInfo,
   isTitlePageUrl,
+  resolveHentasisDirect,
   type HentasisFile,
   type PageRequestInit,
 } from '@/api/hentasis'
@@ -65,6 +66,7 @@ export interface HentasisState {
   files: HentasisFile[]
   picked: number
   open: boolean
+  resolving: boolean
   others: { url: string; title: string }[]
 }
 
@@ -84,6 +86,7 @@ const state = reactive<HentasisState>({
   picked: -1,
   open: false,
   others: [],
+  resolving: false,
 })
 
 function readLinks(): Record<string, SavedLink> {
@@ -118,6 +121,8 @@ function say(e: unknown): string {
 /** HTML страницы: через Rust-сторону Tauri, чтобы CORS не мешал. POST нужен поиску DLE. */
 async function fetchPage(page: string, init?: PageRequestInit): Promise<string> {
   let referer = 'https://hentasis1.top/'
+  headers['User-Agent'] =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
   try {
     referer = new URL(page).origin + '/'
   } catch {
@@ -162,6 +167,7 @@ function resetResult(): void {
   state.files = []
   state.picked = -1
   state.others = []
+  state.resolving = false
 }
 
 async function loadPage(url: string, remember: boolean): Promise<void> {
@@ -333,8 +339,10 @@ function useCandidate(url: string): void {
   void loadPage(url, true)
 }
 
-function play(index: number): void {
-  if (state.files[index] === undefined) return
+async function play(index: number): Promise<void> {
+  const file = state.files[index]
+  if (file === undefined) return
+
   state.picked = index
 
   const map = readLinks()
@@ -343,6 +351,29 @@ function play(index: number): void {
     record.file = index
     writeLinks(map)
   }
+
+  // Страницы-плееры зеркал (video.php) в iframe отдают блокировку: чужой Referer.
+  // Разыменовываем в прямую ссылку и играем родным тегом; результат кешируется в files.
+  if (file.kind === 'iframe' && file.url.includes('video.php')) {
+    if (/^(mp4|hls)$/.test(file.kind)) {
+      state.open = true
+      return
+    }
+
+    state.resolving = true
+    try {
+      const direct = await resolveHentasisDirect(file.url, fetchPage)
+      if (direct === null) {
+        state.trouble =
+          'Файл закрыт защитой сайта и прямой ссылки не нашлось. Открой страницу в браузере.'
+        return
+      }
+      state.files[index] = { ...file, url: direct.url, kind: direct.kind }
+    } finally {
+      state.resolving = false
+    }
+  }
+
   state.open = true
 }
 
