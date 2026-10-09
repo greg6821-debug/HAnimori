@@ -407,7 +407,10 @@ const veil = computed<boolean>(() => {
 })
 /** Тайтл, где человек уже смотрел/выбирал Hentasis: его kodik-ошибки — не заслонка. */
 const hxTouched = computed<boolean>(
-  () => hentasis.state.open || hentasis.state.picked >= 0 || hentasis.state.matchedUrl !== '',
+  () =>
+    hentasis.state.open ||
+    hentasis.state.picked >= 0 ||
+    hentasis.state.matchedUrls.some((u) => u !== ''),
 )
 /** Что написано на заслонке: случаев без ссылки три, и путать их нельзя — при смене озвучки
  * серия выбрана и ждёт ссылки, а «Серия не выбрана» читалось как сброс выбора. */
