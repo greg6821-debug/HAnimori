@@ -87,7 +87,9 @@ const groups = computed<FileGroup[]>(() => {
       <button
         class="am-hx__save"
         type="button"
-        :disabled="state.busy || state.slotBusy >= 0 || (state.manualUrls[n - 1] ?? '').trim() === ''"
+        :disabled="
+          state.busy || state.slotBusy >= 0 || (state.manualUrls[n - 1] ?? '').trim() === ''
+        "
         @click="hentasis.openSlot(n - 1)"
       >
         Открыть
@@ -113,15 +115,19 @@ const groups = computed<FileGroup[]>(() => {
       <button
         class="am-hx__save"
         type="button"
-        :disabled="state.busy || state.slotBusy >= 0 || (state.basesText[n - 1] ?? '').trim() === ''"
+        :disabled="
+          state.busy || state.slotBusy >= 0 || (state.basesText[n - 1] ?? '').trim() === ''
+        "
         @click="hentasis.searchDomain(n - 1)"
       >
         Найти
       </button>
     </div>
-    
+
     <p v-if="state.resolving" class="am-hx__note" role="status">Открываю файл…</p>
-    <p v-else-if="state.busy || state.slotBusy >= 0" class="am-hx__note" role="status">Ищу тайтл…</p>
+    <p v-else-if="state.busy || state.slotBusy >= 0" class="am-hx__note" role="status">
+      Ищу тайтл…
+    </p>
     <p v-else-if="state.trouble !== ''" class="am-hx__note am-hx__note--err" role="alert">
       {{ state.trouble }}
     </p>

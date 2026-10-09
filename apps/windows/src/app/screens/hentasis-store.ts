@@ -1,6 +1,6 @@
 // Хранилище источника Hentasis (18+): три слота «домен или ссылка», автопоиск
 // по названиям с AniList (только первый слот), слияние файлов всех слотов.
-// Суффикс домена в пометке не даёт группам разных зеркал склеиваться. 
+// Суффикс домена в пометке не даёт группам разных зеркал склеиваться.
 
 import { computed, reactive } from 'vue'
 
@@ -232,7 +232,9 @@ async function runSearch(): Promise<void> {
     const found = await autoFindHentasis([base], buildSearchQueries(titles), titles, fetchPage, {
       year: year > 0 ? year : undefined,
     })
-    state.others = found.candidates.filter((c) => c.score > 0).map(({ url, title }) => ({ url, title }))
+    state.others = found.candidates
+      .filter((c) => c.score > 0)
+      .map(({ url, title }) => ({ url, title }))
 
     if (found.best === null) {
       state.trouble =
@@ -310,7 +312,6 @@ async function searchDomain(slot: number): Promise<void> {
   }
 }
 
-
 function bindAnime(id: number): void {
   state.open = false
   if (state.animeId === id) return
@@ -327,11 +328,7 @@ function bindAnime(id: number): void {
   } catch {
     saved = null
   }
-  if (
-    Array.isArray(saved) &&
-    saved.length === 3 &&
-    saved.every((b) => typeof b === 'string')
-  ) {
+  if (Array.isArray(saved) && saved.length === 3 && saved.every((b) => typeof b === 'string')) {
     state.basesText = saved as string[]
   } else {
     state.basesText = [...DEFAULT_BASES]
@@ -440,7 +437,7 @@ export const hentasis = {
   bindAnime,
   runSearch,
   openSlot,
-  searchDomain,   // ← добавить
+  searchDomain, // ← добавить
   useCandidate,
   play,
   close,
