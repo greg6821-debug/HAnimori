@@ -74,19 +74,18 @@ const state = reactive<HentasisState>({
   others: [],
 })
 
-/** Записи в localStorage бывают двух поколений: { url, file } и { urls: […], file }.
- * Приводим к одному виду — массив из трёх слотов, лишние игнорируются. */
+/** Записи в localStorage двух поколений: { url, file } и { urls: […], file }.
+ * Приводим к одному виду — массив из трёх слотов. */
 function normalizeRecord(raw: unknown): SavedLink {
   const record = (raw ?? {}) as Partial<SavedLink> & { url?: string | null }
 
-  let urls: (string | null)[] = [null, null, null]
+  const urls: (string | null)[] = [null, null, null]
   if (Array.isArray(record.urls)) {
     for (let i = 0; i < 3; i += 1) {
       const value = record.urls[i]
       urls[i] = typeof value === 'string' && value !== '' ? value : null
     }
   } else if (typeof record.url === 'string' && record.url !== '') {
-    // Старый формат: одна ссылка — это слот 0.
     urls[0] = record.url
   }
 
@@ -170,13 +169,7 @@ function resetResult(): void {
   state.resolving = false
 }
 
-function domainTag(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '')
-  } catch {
-    return url
-  }
-}
+
 
 /** Слот по адресу: какому домену принадлежит ссылка. */
 function slotOf(url: string): number {
@@ -205,7 +198,6 @@ async function loadSlot(slot: number, url: string, remember: boolean): Promise<b
       writeLinks(map)
     }
 
-    const tag = domainTag(url)
     const offset = state.files.length
     info.files.forEach((file, i) => {
       state.files.push({ ...file })
@@ -277,6 +269,7 @@ async function runSearch(): Promise<void> {
 }
 
 /** Слот: ссылка на тайтл — открываем, домен — ищем по нему. */
+/** Слот: ссылка на тайтл — открываем, домен — ставим в слот и ищем по нему. */
 async function openSlot(slot: number): Promise<void> {
   const raw = (state.manualUrls[slot] ?? '').trim()
   if (raw === '' || state.busy || state.slotBusy >= 0) return
@@ -288,10 +281,21 @@ async function openSlot(slot: number): Promise<void> {
     return
   }
 
-  if ((state.basesText[slot] ?? '') === '') {
-    state.basesText[slot] = origin
-    localStorage.setItem(BASES_KEY, JSON.stringify(state.basesText))
+  // Домен: без схемы пробуем https сами; не адрес вовсе — жалуемся.
+  let origin = raw
+  try {
+    origin = new URL(raw).origin.replace(/\/+$/, '')
+  } catch {
+    try {
+      origin = new URL(`https://${raw}`).origin.replace(/\/+$/, '')
+    } catch {
+      state.trouble = 'Не похоже на адрес: нужен домен или ссылка на тайтл.'
+      return
+    }
   }
+
+  state.basesText[slot] = origin
+  localStorage.setItem(BASES_KEY, JSON.stringify(state.basesText))
 
   await searchDomain(slot)
 }
@@ -375,6 +379,13 @@ function bindAnime(id: number): void {
     if (state.trouble !== '') {
       state.trouble = `Часть доменов не открылась (${state.trouble}). Нажми «Открыть» заново.`
     }
+
+    // Выбранный ранее файл: помечаем и открываем сразу — автозапуск с последнего места.
+    const fresh = readLinks()[String(id)]
+    const savedFile = fresh?.file
+    if (savedFile !== undefined && savedFile >= 0 && savedFile < state.files.length) {
+      void play(savedFile)
+    }
   })
 }
 
@@ -453,6 +464,8 @@ const groups = computed(() => {
         return file.url
       }
     })()
+    // Домен — в ключ (одинаковые озвучки разных зеркал не склеиваются),
+    // но не в подпись: человеку всё равно, откуда файл.
     const key = note === '' ? `\u0000${index}` : `${note}@@${domain}`
     const found = byNote.get(key)
     if (found !== undefined) found.items.push({ index, file })
