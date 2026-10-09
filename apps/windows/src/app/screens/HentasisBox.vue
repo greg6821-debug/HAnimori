@@ -4,13 +4,18 @@
 import { computed, ref, watch } from 'vue'
 
 import type { HentasisFile } from '@/api/hentasis'
+import { Bridge } from '@/bridge'
 
 import { hentasis } from './hentasis-store'
 
-import { Bridge } from '@/bridge'
+const props = defineProps<{ animeId: number }>()
+
+const state = hentasis.state
+
 /** Файлы в боксе спрятаны за переключателем: основной путь — списки плеера
  * («Озвучка»/«Серии»), здесь они остаются запасным доступом. */
 const showFiles = ref(false)
+
 /** Наружу через оболочку — тем же путём, что ссылки описания на карточке:
  * в WebView2 новый таргет молча отбрасывается, а переход в том же окне унёс бы приложение. */
 async function openSite(): Promise<void> {
@@ -23,10 +28,6 @@ async function openSite(): Promise<void> {
     state.trouble = `Браузер не открылся: ${e instanceof Error ? e.message : String(e)}`
   }
 }
-
-const props = defineProps<{ animeId: number }>()
-
-const state = hentasis.state
 
 watch(
   () => props.animeId,
@@ -88,12 +89,7 @@ const groups = computed<FileGroup[]>(() => {
     </label>
 
     <div class="am-hx__row">
-      <button
-        class="am-hx__save"
-        type="button"
-        :disabled="state.busy"
-        @click="hentasis.runSearch()"
-      >
+      <button class="am-hx__save" type="button" :disabled="state.busy" @click="hentasis.runSearch()">
         Искать по названию
       </button>
       <button
@@ -185,6 +181,17 @@ const groups = computed<FileGroup[]>(() => {
         </div>
       </template>
     </template>
+
+    <button
+      v-if="state.matchedUrl !== ''"
+      class="am-hx__link"
+      type="button"
+      @click="openSite()"
+    >
+      Открыть страницу на сайте ↗
+    </button>
+  </div>
+</template>
 
 <style scoped>
 .am-hx {
@@ -317,7 +324,16 @@ const groups = computed<FileGroup[]>(() => {
   padding: 0;
   background: none;
   border: 0;
+  color: #8ab4ff;
+  font-size: 12px;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.am-hx__link:hover {
+  text-decoration: underline;
 }
 </style>
