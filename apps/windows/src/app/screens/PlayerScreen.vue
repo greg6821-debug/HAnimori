@@ -1220,7 +1220,12 @@ onMounted(() => {
 })
 
 watch(
-  () => [hentasis.state.open, hentasis.state.picked, hentasis.state.files[hentasis.state.picked]?.url ?? ''] as const,
+  () =>
+    [
+      hentasis.state.open,
+      hentasis.state.picked,
+      hentasis.state.files[hentasis.state.picked]?.url ?? '',
+    ] as const,
   ([open, , url], [wasOpen, , wasUrl]) => {
     if (open) {
       const file = hentasis.state.files[hentasis.state.picked]
