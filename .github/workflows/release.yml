@@ -2,7 +2,7 @@
 # сборка не идёт: каждый прогон — это полная компиляция Rust на windows-latest, а смысл она имеет
 # только для выпуска.
 
-name: release
+name: 3. release
 
 on:
   push:
