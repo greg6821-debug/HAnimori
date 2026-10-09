@@ -231,7 +231,7 @@ const NOTE_STOP_RE =
   /(Скачать|Плеер|Смотреть онлайн|Трейлер|Коммент|Реклама|Похожее|Внимание|Телеграм)/i
 
 /** Строка похожа на продолжение примечания: «Файл N…», «озвучка…», «субтитры…». */
-const NOTE_LINE_RE = /[Фф]айл|субтитр|озвучк|хента-?трек/i
+const NOTE_LINE_RE = /[Фф]айл|субтитр|озвучк|хента-?трек|перевод/i;
 
 function extractNoteText(html: string): string {
   const plain = html
@@ -299,10 +299,11 @@ function classifyNote(body: string): { kind: string; team: string } {
   if (bang >= 0) text = text.slice(0, bang)
   text = text.replace(/\s+/g, ' ').trim()
 
-  let kind = ''
-  if (/хента-?трек/i.test(text)) kind = 'хента-трек'
-  else if (/озвучк/i.test(text)) kind = 'озвучка'
-  else if (/субтитр/i.test(text)) kind = 'субтитры'
+  let kind = '';
+  if (/хента-?трек/i.test(text)) kind = 'хента-трек';
+  else if (/озвучк/i.test(text)) kind = 'озвучка';
+  else if (/субтитр/i.test(text)) kind = 'субтитры';
+  else if (/без\s+перевода/i.test(text)) kind = 'без перевода';
 
   // Команда: после «от», а если «от» нет — снимаем слово-вид и предлоги,
   // остальное и есть команда («субтитры EroSonsor!» → «EroSonsor»).
@@ -318,7 +319,9 @@ function classifyNote(body: string): { kind: string; team: string } {
           .replace(/[.,;:]+/g, ' ')
           .replace(/\s+/g, ' ')
           .trim()
-  if (team.length > 40) team = '' // длинный хвост — не название команды
+  // Перечисление команд одной дорожки: «AniStar и AniLibria» → «AniStar, AniLibria».
+  team = team.replace(/\s+и\s+/gi, ', ');
+  if (team.length > 40) team = ''; // длинный хвост — не название команды
 
   return { kind, team }
 }
@@ -361,60 +364,66 @@ export async function getHentasisInfo(
   fetchPage: PageFetcher,
 ): Promise<HentasisInfo> {
   if (!/^https?:\/\//i.test(pageUrl)) {
-    throw new Error('Нужна ссылка на страницу тайтла, например https://hentasis1.top/985-….html')
+    throw new Error('Нужна ссылка на страницу тайтла, например https://hentasis1.top/985-….html');
   }
 
-  const html = await fetchPage(pageUrl)
+  const fetched = await fetchPage(pageUrl);
+
+  // Шаблон DLE держит старые плееры в HTML-комментариях: без срезки они давали
+  // «вторую четвёрку файлов». Чистим один раз и дальше работаем с чистым HTML —
+  // это касается и конфигов плеера, и примечания.
+  const html = fetched
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ');
 
   const rawTitle =
     /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i.exec(html)?.[1] ??
-    /<title>([^<]*)<\/title>/i.exec(html)?.[1]
-  const rawPoster = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i.exec(
-    html,
-  )?.[1]
+    /<title>([^<]*)<\/title>/i.exec(html)?.[1];
+  const rawPoster =
+    /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i.exec(html)?.[1];
 
-  const configs = extractConfigs(html, pageUrl)
-  const first = configs[0]
+  const configs = extractConfigs(html, pageUrl);
+  const first = configs[0];
   if (first === undefined) {
     throw new Error(
       'Видео на странице не нашлось: это не страница тайтла (или сайт отдал заглушку). ' +
         'Ссылка должна выглядеть так: https://hentasis1.top/1094-….html',
-    )
+    );
   }
 
-  const noteMap = parseHentasisNote(extractNoteText(html))
+  const noteMap = parseHentasisNote(extractNoteText(html));
 
-  // Из нескольких конфигов берём настоящий плеер: тот, чьё число файлов совпадает
+  // Из нескольких живых конфигов берём настоящий плеер: чьё число файлов совпадает
   // с наибольшим номером примечания; без примечания — самый большой из конфигов.
-  let chosen = first
+  let chosen = first;
   if (configs.length > 1) {
-    let noteMax = 0
-    for (const n of noteMap.keys()) if (n > noteMax) noteMax = n
+    let noteMax = 0;
+    for (const n of noteMap.keys()) if (n > noteMax) noteMax = n;
 
-    const byNote = noteMax > 0 ? configs.find((c) => c.files.length === noteMax) : undefined
-    if (byNote !== undefined) chosen = byNote
-    else for (const c of configs) if (c.files.length > chosen.files.length) chosen = c
+    const byNote = noteMax > 0 ? configs.find((c) => c.files.length === noteMax) : undefined;
+    if (byNote !== undefined) chosen = byNote;
+    else for (const c of configs) if (c.files.length > chosen.files.length) chosen = c;
   }
 
   const files: HentasisFile[] = chosen.files.map((file, index) => {
-    const labeled = /^Файл\s*(\d+)$/i.exec(file.label ?? '')
-    const number = labeled !== null && labeled[1] !== undefined ? Number(labeled[1]) : index + 1
+    const labeled = /^Файл\s*(\d+)$/i.exec(file.label ?? '');
+    const number = labeled !== null && labeled[1] !== undefined ? Number(labeled[1]) : index + 1;
 
     const built: HentasisFile = {
       label: file.label !== undefined && file.label !== '' ? file.label : `Файл ${index + 1}`,
       url: file.url,
       kind: classify(file.url),
-    }
-    const note = noteMap.get(number)
-    if (note !== undefined) built.note = note
-    return built
-  })
+    };
+    const note = noteMap.get(number);
+    if (note !== undefined) built.note = note;
+    return built;
+  });
 
   return {
     title: rawTitle === undefined ? undefined : clean(rawTitle),
     poster: rawPoster === undefined ? undefined : absolutize(rawPoster, pageUrl) || undefined,
     files,
-  }
+  };
 }
 
 /* ---------- Поиск тайтла по названиям ---------- */
