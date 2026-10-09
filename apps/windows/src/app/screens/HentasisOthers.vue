@@ -10,7 +10,7 @@ const state = hentasis.state
 
 const list = computed(() => state.others)
 const showWall = computed(
-  () => list.value.length > 1 || (list.value.length > 0 && state.matchedUrl === ''),
+  () => list.value.length > 1 || (list.value.length > 0 && state.matchedUrls[0] === ''),
 )
 </script>
 
