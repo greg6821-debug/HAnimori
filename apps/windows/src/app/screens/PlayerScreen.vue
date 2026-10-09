@@ -189,12 +189,13 @@ const hxFrameOn = computed<boolean>(() => {
   return hentasis.state.open && file !== undefined && file.kind === 'iframe'
 })
 
-
 /** Выбранная группа Hentasis: -1 — обычные источники, иначе индекс в hxGroups. */
 const hxVoice = ref(-1)
 
 const hxGroups = hentasis.groups
-const hxGroup = computed(() => (hxVoice.value >= 0 ? (hxGroups.value[hxVoice.value] ?? null) : null))
+const hxGroup = computed(() =>
+  hxVoice.value >= 0 ? (hxGroups.value[hxVoice.value] ?? null) : null,
+)
 
 /** Где в группах лежит текущий picked: группа и номер внутри неё (с единицы). */
 function hxAddress(): { group: number; number: number } | null {
@@ -244,7 +245,6 @@ function doNext(): void {
   if (hasNext.value) nextEpisode()
 }
 
-  
 const {
   busy,
   trouble,
@@ -293,7 +293,7 @@ watch(
     hxResume = null
   },
 )
-  
+
 /** Снимок для истории. Ключ главнее состояния экрана: метку пишут и после смены выбора,
  * поэтому серия и подпись озвучки берутся из самого ключа. */
 function aboutSpot(key: string): WatchWhat {
@@ -1095,8 +1095,12 @@ function act(intent: PlayerIntent): void {
     case 'faster':
       setRate(stepRate(rate.value, 1))
       return
-    case 'prevEpisode': doPrev(); return
-    case 'nextEpisode': doNext(); return
+    case 'prevEpisode':
+      doPrev()
+      return
+    case 'nextEpisode':
+      doNext()
+      return
     case 'skip':
       doSkip()
       return
@@ -1227,7 +1231,6 @@ watch(
   },
 )
 
-  
 // Новый адрес — новое аниме: экран не пересобирается, грузим сами.
 watch(mediaId, () => {
   playback?.close()
@@ -1590,7 +1593,11 @@ onBeforeUnmount(() => {
           <div class="am-play__box">
             <h3 class="am-play__h">Озвучка</h3>
 
-            <ul v-if="voices.length > 0 || hxGroups.length > 0" class="am-play__list" data-zone="voices">
+            <ul
+              v-if="voices.length > 0 || hxGroups.length > 0"
+              class="am-play__list"
+              data-zone="voices"
+            >
               <li v-for="(group, gi) in hxGroups" :key="`hx-${gi}`">
                 <button
                   class="am-play__item"
@@ -1600,10 +1607,12 @@ onBeforeUnmount(() => {
                 >
                   <span class="am-play__word-cut">{{ group.label }}</span>
                   <span class="am-play__src">Hentasis</span>
-                  <span v-if="group.items.length > 0" class="am-play__time">файлов: {{ group.items.length }}</span>
+                  <span v-if="group.items.length > 0" class="am-play__time"
+                    >файлов: {{ group.items.length }}</span
+                  >
                 </button>
               </li>
-            
+
               <li v-for="voice in voices" :key="voice.key">
                 <button
                   class="am-play__item"
@@ -1626,8 +1635,6 @@ onBeforeUnmount(() => {
           <div class="am-play__box">
             <h3 class="am-play__h">Серии</h3>
 
-
-
             <ul v-if="hxGroup !== null" class="am-play__list" data-zone="episodes">
               <li v-for="(item, at) in hxGroup.items" :key="item.file.url">
                 <button
@@ -1638,8 +1645,15 @@ onBeforeUnmount(() => {
                 >
                   <span class="am-play__num">{{ at + 1 }}</span>
                   <span class="am-play__word-cut">{{ item.file.label }}</span>
-                  <span v-if="hxSeenShare(hxVoice, at) > 0" class="am-play__seen" aria-hidden="true">
-                    <span class="am-play__seen-fill" :style="{ width: hxSeenShare(hxVoice, at) + '%' }" />
+                  <span
+                    v-if="hxSeenShare(hxVoice, at) > 0"
+                    class="am-play__seen"
+                    aria-hidden="true"
+                  >
+                    <span
+                      class="am-play__seen-fill"
+                      :style="{ width: hxSeenShare(hxVoice, at) + '%' }"
+                    />
                   </span>
                 </button>
               </li>

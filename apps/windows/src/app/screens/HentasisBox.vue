@@ -9,7 +9,6 @@ import { hentasis } from './hentasis-store'
 
 import { Bridge } from '@/bridge'
 
-
 /** Наружу через оболочку — тем же путём, что ссылки описания на карточке:
  * в WebView2 новый таргет молча отбрасывается, а переход в том же окне унёс бы приложение. */
 async function openSite(): Promise<void> {
@@ -22,8 +21,7 @@ async function openSite(): Promise<void> {
     state.trouble = `Браузер не открылся: ${e instanceof Error ? e.message : String(e)}`
   }
 }
-  
-  
+
 const props = defineProps<{ animeId: number }>()
 
 const state = hentasis.state
@@ -176,12 +174,7 @@ const groups = computed<FileGroup[]>(() => {
       </div>
     </div>
 
-    <button
-      v-if="state.matchedUrl !== ''"
-      class="am-hx__link"
-      type="button"
-      @click="openSite()"
-    >
+    <button v-if="state.matchedUrl !== ''" class="am-hx__link" type="button" @click="openSite()">
       Открыть страницу на сайте ↗
     </button>
   </div>

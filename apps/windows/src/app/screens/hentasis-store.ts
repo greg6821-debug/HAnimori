@@ -16,7 +16,6 @@ import {
 } from '@/api/hentasis'
 import { peekRussianName, prefetchRussianNames } from '@/core/media-title'
 
-
 import { computed, reactive } from 'vue'
 
 /** Группа файлов с одинаковой пометкой: по ней Hentasis выглядит как озвучка. */
@@ -40,7 +39,6 @@ const groups = computed<HentasisGroup[]>(() => {
 
   return [...byNote.values()]
 })
-
 
 const LINKS_KEY = 'animori:hentasis-links'
 const BASES_KEY = 'animori:hentasis-bases'
