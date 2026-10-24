@@ -136,7 +136,7 @@ const shownTab = computed<Tab>(() => {
   return all.indexOf(tab.value) >= 0 ? tab.value : (all[0] ?? 'desc')
 })
 
-/** Видимые работы: отбор 18+ живёт на слое показа, а не в запросе. */
+/** Видимые работы: отбор 18+ на слое показа, а не в запросе. */
 function shownWorks(): readonly StaffWork[] {
   return keepAllowed(works.value, (work) => work.isAdult)
 }
@@ -428,7 +428,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    class="am-sheet"
+    class="am-sheet am-sheet--veil"
     :class="{ 'am-sheet--tv': lite }"
     role="dialog"
     aria-modal="true"

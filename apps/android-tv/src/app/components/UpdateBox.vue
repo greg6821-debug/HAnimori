@@ -96,68 +96,72 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="am-modal" role="dialog" aria-modal="true" aria-label="Обновление">
-      <!-- Клик мимо закрывает: окно не держит человека силой, обновление можно отложить. -->
-      <div class="am-modal__veil" @click="onClose" />
+    <Transition name="am-modal">
+      <div v-if="open" class="am-modal" role="dialog" aria-modal="true" aria-label="Обновление">
+        <!-- Клик мимо закрывает: окно не держит человека силой, обновление можно отложить. -->
+        <div class="am-modal__veil" @click="onClose" />
 
-      <div class="am-modal__box">
-        <div class="am-modal__head">
-          <h3 class="am-modal__title">
-            {{ updateOffer ? `Обновление до ${updateOffer.version}` : 'Обновление' }}
-          </h3>
-          <button class="am-modal__x" type="button" aria-label="Закрыть" @click="onClose">✕</button>
-        </div>
+        <div class="am-modal__box">
+          <div class="am-modal__head">
+            <h3 class="am-modal__title">
+              {{ updateOffer ? `Обновление до ${updateOffer.version}` : 'Обновление' }}
+            </h3>
+            <button class="am-modal__x" type="button" aria-label="Закрыть" @click="onClose">
+              ✕
+            </button>
+          </div>
 
-        <!-- tabindex у тела: с фокусом на кнопке обход пульта видит, что находится внутри окна. -->
-        <div class="am-modal__body" tabindex="0" data-am-seed>
-          <p v-if="busy">Спрашиваю GitHub…</p>
+          <!-- tabindex у тела: с фокусом на кнопке обход пульта видит, что находится внутри окна. -->
+          <div class="am-modal__body" tabindex="0" data-am-seed>
+            <p v-if="busy">Спрашиваю GitHub…</p>
 
-          <template v-else-if="updateOffer">
-            <p class="am-up__lead">
-              Выпуск новее установленного. Файл скачивается в кэш приложения, установку подтверждает
-              система.
-            </p>
+            <template v-else-if="updateOffer">
+              <p class="am-up__lead">
+                Выпуск новее установленного. Файл скачивается в кэш приложения, установку
+                подтверждает система.
+              </p>
 
-            <!-- Переносы в описании выпуска сохранены: его пишут списком, и склеенный в строку список не читается. -->
-            <p v-if="updateOffer.notes" class="am-up__notes">{{ updateOffer.notes }}</p>
+              <!-- Переносы в описании выпуска сохранены: его пишут списком, и склеенный в строку список не читается. -->
+              <p v-if="updateOffer.notes" class="am-up__notes">{{ updateOffer.notes }}</p>
 
-            <div v-if="away" class="am-up__warn">
-              Скачивания не было: у приложения нет права устанавливать пакеты. Откройте настройки
-              Android, разрешите установку из неизвестных источников для AniMori и вернитесь —
-              нажмите «Установить» снова.
-            </div>
-          </template>
+              <div v-if="away" class="am-up__warn">
+                Скачивания не было: у приложения нет права устанавливать пакеты. Откройте настройки
+                Android, разрешите установку из неизвестных источников для AniMori и вернитесь —
+                нажмите «Установить» снова.
+              </div>
+            </template>
 
-          <p v-else>{{ said }}</p>
-        </div>
+            <p v-else>{{ said }}</p>
+          </div>
 
-        <div class="am-modal__foot">
-          <button
-            v-if="updateOffer"
-            ref="go"
-            class="am-btn am-up__go"
-            type="button"
-            @click="onInstall"
-          >
-            Установить
-          </button>
+          <div class="am-modal__foot">
+            <button
+              v-if="updateOffer"
+              ref="go"
+              class="am-btn am-up__go"
+              type="button"
+              @click="onInstall"
+            >
+              Установить
+            </button>
 
-          <button
-            v-else
-            ref="go"
-            class="am-btn am-btn--soft am-up__go"
-            type="button"
-            @click="onClose"
-          >
-            Понятно
-          </button>
+            <button
+              v-else
+              ref="go"
+              class="am-btn am-btn--soft am-up__go"
+              type="button"
+              @click="onClose"
+            >
+              Понятно
+            </button>
 
-          <button v-if="updateOffer" class="am-btn am-btn--soft" type="button" @click="onClose">
-            Позже
-          </button>
+            <button v-if="updateOffer" class="am-btn am-btn--soft" type="button" @click="onClose">
+              Позже
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
   </Teleport>
 </template>
 
@@ -308,6 +312,34 @@ onBeforeUnmount(() => {
 /* Главная кнопка тянется: на пульте попасть в широкую цель легче, чем в узкую. */
 .am-up__go {
   flex: 1 1 auto;
+}
+
+/* Телефон: центр экрана и границы как у прочих оверлеев — токены держат системные полосы;
+   флекс вместо сетки: авто-трек grid рос по содержимому и уводил коробку за край. */
+@media (max-width: 640px) {
+  .am-modal {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-block: var(--am-modal-top) var(--am-modal-bottom);
+    padding-inline: 12px;
+  }
+
+  .am-modal__box {
+    width: 100%;
+    max-height: 100%;
+    overflow: hidden;
+  }
+
+  .am-modal__title {
+    font-size: 17px;
+  }
+
+  .am-modal__x {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

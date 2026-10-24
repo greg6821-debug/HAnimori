@@ -13,9 +13,7 @@
 ### Смотрите аниме и ведите списки AniList на русском — на ПК и ТВ. 
 ### Доступен просмотр 18+ контента только на ПК версии. Форк AniMori, обновления не планируются.
 
-Неофициальный клиент AniList для Windows. Программа сама обращается
-к API и подставляет русские названия и описания из Shikimori —
-браузер и менеджер скриптов не нужны.
+Неофициальный клиент AniList для Windows, Android TV и телефона. Перевод контента — Shikimori.
 
 [![Версия](https://img.shields.io/badge/версия-3.1.0-02A9FF?style=flat-square&labelColor=0B1622)](https://github.com/greg6821-debug/HAnimori/releases)
 [![Лицензия](https://img.shields.io/badge/лицензия-MIT-02A9FF?style=flat-square&labelColor=0B1622)](LICENSE)
@@ -26,23 +24,19 @@
 
 </div>
 
-<p align="center">
-  <img src="apps/windows/assets/screenshots/home.png" width="92%" alt="Главная: календарь выхода, продолжение просмотра, полки">
-</p>
+## Актуальные версии
 
-## Почему это удобно
+| Приложение | Версия | Скачать |
+| :--- | :--- | :--- |
+| **Windows** 10/11 | 3.1.2 | [установщик, MSI, портативный архив](https://github.com/foulnike/Animori/releases/latest) |
+| **Android TV** 7.0+ | 3.1.2 | [APK arm64 и armv7](https://github.com/foulnike/Animori/releases/tag/android-tv-v3.1.2) |
+| **Телефон** (Android 7.0+) | 3.1.2 | [APK arm64 и armv7](https://github.com/foulnike/Animori/releases/tag/android-v3.1.2) |
 
-- **Список открывается без сети.** Правки хранятся на устройстве: AniList не
-  падает, страница не нужна. Статус, оценка, серии, пересмотры, даты и заметка
-  меняются прямо в шторке.
-- **Продолжение в один клик.** История помнит, где вы остановились.
-- **Русские названия подставляет сама программа.** AniList даёт карточку,
-  Shikimori — русский тайтл и описание.
-- **Свой плеер внутри.** Серия, озвучка, качество, два источника.
-- **Ни рекламы, ни телеметрии, ни своих серверов.** Токен, настройки и кэш лежат
-  на вашей машине.
-- **Список никуда не отправляется.** Изменения не уходят ни в AniList, ни в
-  Шикимори.
+## Связь с разработчиком
+
+Вопросы, предложения, баг-репорты — в группе Telegram: https://t.me/foulnike_backrooms
+
+---
 
 > [!WARNING]
 > **Видеоисточники.** Встроенный плеер открывает потоки сторонних сервисов
@@ -70,11 +64,28 @@
   </tr>
 </table>
 
-Перенос списка из AniList, с Шикимори по нику или файлом выгрузки MyAnimeList.
-Спасти можно тем же XML, который принимают AniList, Шикимори и Kitsu, либо
-копией в облако. Смотрите в отдельном окне или транслируйте на телевизор.
+Перенос списка — из AniList, с Шикимори по нику или файлом выгрузки MyAnimeList.
+Экспорт — в тот же XML, который принимают AniList, Шикимори и Kitsu, или копия в облако.
+Смотрите в отдельном окне или передавайте на телевизор.
 Подробности — в [apps/windows](apps/windows).
 
+## Приложение для телевизора
+
+**Android TV, Android 7.0 и новее**, управление с пульта.
+
+<p align="center">
+  <img src="apps/android-tv/screens/preview-calendar.png" width="23%" alt="Календарь выхода серий">
+  <img src="apps/android-tv/screens/preview-recs.png" width="23%" alt="Полки рекомендаций">
+  <img src="apps/android-tv/screens/preview-lists.png" width="23%" alt="Мои списки">
+  <img src="apps/android-tv/screens/preview-card.png" width="23%" alt="Карточка тайтла">
+</p>
+
+<p align="center"><sub>Календарь · Рекомендации · Списки · Карточка</sub></p>
+
+APK в [выпусках](https://github.com/foulnike/Animori/releases):
+`AniMori_3.1.1_armv7.apk` для 32-разрядных приставок и `AniMori_3.1.1_arm64.apk`
+для 64-разрядных. Установка из неизвестных источников, ставится с пульта.
+Подробности — в [apps/android-tv](apps/android-tv).
 
 ## Сборка
 
@@ -91,9 +102,11 @@ npm run typecheck
 
 ```bash
 cd apps/windows   && npm run tauri dev
+cd apps/android-tv && npm run tauri -- android dev
+cd apps/android   && npm run tauri -- android dev   # туннель adb: см. apps/android
 ```
 
-Выпуск делается тегом: `windows-v3.1.0`
+Выпуск делается тегом: `windows-v3.1.2`, `android-tv-v3.1.2` или `android-v3.1.2`.
 
 ## Устройство репозитория
 
@@ -102,6 +115,7 @@ cd apps/windows   && npm run tauri dev
 | `packages/core` | Общее ядро: данные, снимок, облачная копия, видео |
 | `apps/windows` | Настольное приложение: экраны и оболочка |
 | `apps/android-tv` | Приложение для телевизора: экраны и оболочка |
+| `apps/android` | Приложение для телефона: экраны и оболочка |
 | `docs` | Документация: правовая и для разработчиков — [оглавление](docs/README.md) |
 
 ## Лицензия
